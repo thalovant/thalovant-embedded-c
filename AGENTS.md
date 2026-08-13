@@ -36,5 +36,16 @@ Rules:
 
 Validate with `make test CC=gcc` and `make test CC=clang`.
 
+Releases are automated: `auto-release.yml` tags and creates the GitHub
+release for an untagged `VERSION` on `main` (auto-bumping a patch when the
+current version is already tagged), and `release.yml` validates the tag,
+re-runs the gcc and clang suites, and attaches the attested source
+archive, CycloneDX SBOM, and `SHA256SUMS` to the release. The `VERSION`
+file, `THALOVANT_VERSION` in `include/thalovant/version.h`, its pin in
+`tests/test_version.c`, the `v<version>` references in `README.md`, the
+`ThalovantEmbeddedC/<version>` example in `docs/linux-websocket.md`, and
+`CHANGELOG.md` must move together in a release. See `RELEASING.md` for
+the flow, integrator pinning, and rollback rules.
+
 Rollback by tagging a corrected patch release; never move or delete an
 existing tag that consumers may already resolve.
