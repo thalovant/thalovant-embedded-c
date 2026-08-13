@@ -1,0 +1,24 @@
+/* Error codes shared by every Thalovant embedded C module. */
+#ifndef THALOVANT_ERROR_H
+#define THALOVANT_ERROR_H
+
+typedef enum {
+    THALOVANT_OK = 0,
+    /* Bad arguments or malformed input. */
+    THALOVANT_ERR_INVALID = -1,
+    /* A caller-provided buffer or token pool is too small. */
+    THALOVANT_ERR_NOMEM = -2,
+    /* JSON syntax error. */
+    THALOVANT_ERR_JSON = -3,
+    /* A required field is missing. */
+    THALOVANT_ERR_MISSING = -4,
+    /* AES-GCM authentication tag mismatch. */
+    THALOVANT_ERR_AUTH = -5,
+    /* Valid but unsupported input (e.g. compressed binary frames). */
+    THALOVANT_ERR_UNSUPPORTED = -6,
+} thalovant_err;
+
+/* Human-readable name for an error code (never NULL). */
+const char *thalovant_err_str(int err);
+
+#endif /* THALOVANT_ERROR_H */
