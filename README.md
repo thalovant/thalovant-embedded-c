@@ -85,6 +85,36 @@ if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
 Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 [docs/linux-websocket.md](docs/linux-websocket.md).
 
+## Getting a release
+
+Integrators vendor the library or fetch it by an immutable release tag
+(current: `v0.1.0`) — as a git submodule, via CMake `FetchContent`, as an
+ESP-IDF component ref, or in a Zephyr west manifest:
+
+```sh
+# git submodule
+git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
+    third_party/thalovant-embedded-c
+git -C third_party/thalovant-embedded-c checkout v0.1.0
+```
+
+```cmake
+# CMake FetchContent
+FetchContent_Declare(thalovant
+  GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
+  GIT_TAG        v0.1.0)
+```
+
+Every GitHub release also carries a reproducible source archive
+(`thalovant-embedded-c-<version>.tar.gz`), a CycloneDX SBOM, and a
+`SHA256SUMS` file. The archive and SBOM are attested with GitHub Actions
+provenance; verify with:
+
+```sh
+gh attestation verify thalovant-embedded-c-<version>.tar.gz \
+    --repo thalovant/thalovant-embedded-c
+```
+
 ## Building
 
 ```sh
