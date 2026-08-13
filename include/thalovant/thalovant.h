@@ -11,8 +11,10 @@
 #include "thalovant/json.h"
 #include "thalovant/sha256.h"
 #include "thalovant/topics.h"
+#include "thalovant/version.h"
 #include "thalovant/wire.h"
 
-#define THALOVANT_EMBEDDED_C_VERSION "0.1.0"
+/* Compatibility alias for the canonical THALOVANT_VERSION define. */
+#define THALOVANT_EMBEDDED_C_VERSION THALOVANT_VERSION
 
 #endif /* THALOVANT_THALOVANT_H */

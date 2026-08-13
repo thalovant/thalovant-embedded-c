@@ -3,6 +3,7 @@
 int tlv_test_checks = 0;
 int tlv_test_failures = 0;
 
+void tlv_test_version(void);
 void tlv_test_json(void);
 void tlv_test_codec(void);
 void tlv_test_crypto(void);
@@ -13,6 +14,7 @@ void tlv_test_ask(void);
 
 int main(void)
 {
+    tlv_test_version();
     tlv_test_json();
     tlv_test_codec();
     tlv_test_crypto();

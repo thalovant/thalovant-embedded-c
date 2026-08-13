@@ -23,5 +23,8 @@ Initial release.
   with request/session correlation and a reply-frame classifier.
 - In-repo JSON tokenizer; no dynamic allocation in core paths; no external
   dependencies.
+- Canonical library version: `THALOVANT_VERSION` in
+  `include/thalovant/version.h`, mirrored by the root `VERSION` file and
+  pinned by the test suite.
 - Host-side offline test suite (`make test`) green under gcc and clang with
   `-Wall -Wextra -Werror`.
