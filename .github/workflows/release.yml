@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable release tag to check out and attach evidence to
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Validate, archive, and attest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || '' }}
+
+    steps:
+      - name: Check out repository at the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Read library version
+        id: version
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify release tag matches VERSION and the header define
+        env:
+          PROJECT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          test "$RELEASE_TAG" = "v$PROJECT_VERSION"
+          grep -Fxq "#define THALOVANT_VERSION \"$PROJECT_VERSION\"" include/thalovant/version.h
+
+      - name: Build and test with gcc
+        run: |
+          make clean
+          make CC=gcc
+          make test CC=gcc
+
+      - name: Build and test with clang
+        run: |
+          make clean
+          make CC=clang
+          make test CC=clang
+
+      - name: Build deterministic source archive
+        id: artifacts
+        env:
+          PROJECT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p release-artifacts
+          ARCHIVE="release-artifacts/thalovant-embedded-c-$PROJECT_VERSION.tar.gz"
+          git archive --format=tar.gz \
+            --prefix="thalovant-embedded-c-$PROJECT_VERSION/" \
+            --output="$ARCHIVE" "$RELEASE_TAG"
+          echo "archive=$GITHUB_WORKSPACE/$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "sbom=$GITHUB_WORKSPACE/release-artifacts/thalovant-embedded-c-$PROJECT_VERSION.cdx.json" >> "$GITHUB_OUTPUT"
+          echo "sums=$GITHUB_WORKSPACE/release-artifacts/SHA256SUMS" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX SBOM
+        env:
+          PROJECT_VERSION: ${{ steps.version.outputs.version }}
+          ARCHIVE: ${{ steps.artifacts.outputs.archive }}
+          SBOM: ${{ steps.artifacts.outputs.sbom }}
+        run: |
+          python3 <<'PY'
+          import hashlib
+          import json
+          import os
+
+          version = os.environ["PROJECT_VERSION"]
+          with open(os.environ["ARCHIVE"], "rb") as handle:
+              digest = hashlib.sha256(handle.read()).hexdigest()
+
+          # The attest action rejects SBOMs without a serialNumber. Derive a
+          # deterministic urn:uuid from the archive digest so re-running the
+          # workflow on the same tag reproduces the SBOM byte-for-byte.
+          serial = "-".join([
+              digest[0:8],
+              digest[8:12],
+              "5" + digest[12:15],
+              "8" + digest[15:18],
+              digest[18:30],
+          ])
+
+          sbom = {
+              "bomFormat": "CycloneDX",
+              "specVersion": "1.5",
+              "serialNumber": "urn:uuid:" + serial,
+              "version": 1,
+              "metadata": {
+                  "component": {
+                      "type": "library",
+                      "name": "thalovant-embedded-c",
+                      "version": version,
+                      "purl": "pkg:github/thalovant/thalovant-embedded-c@v" + version,
+                      "licenses": [{"license": {"id": "MIT"}}],
+                      "hashes": [{"alg": "SHA-256", "content": digest}],
+                  },
+              },
+              "components": [],
+          }
+
+          with open(os.environ["SBOM"], "w", encoding="utf-8") as handle:
+              json.dump(sbom, handle, indent=2, sort_keys=True)
+              handle.write("\n")
+          PY
+
+      - name: Write SHA256SUMS
+        run: |
+          cd release-artifacts
+          sha256sum thalovant-embedded-c-*.tar.gz thalovant-embedded-c-*.cdx.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest artifact provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.artifacts.outputs.archive }}
+
+      - name: Attest artifact SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.artifacts.outputs.archive }}
+          sbom-path: ${{ steps.artifacts.outputs.sbom }}
+
+      - name: Attach archive, SBOM, and checksums to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE: ${{ steps.artifacts.outputs.archive }}
+          SBOM: ${{ steps.artifacts.outputs.sbom }}
+          SUMS: ${{ steps.artifacts.outputs.sums }}
+        run: |
+          EXISTING_ASSETS="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')"
+          for artifact in "$ARCHIVE" "$SBOM" "$SUMS"; do
+            name="$(basename "$artifact")"
+            if grep -Fxq "$name" <<< "$EXISTING_ASSETS"; then
+              echo "$name is already attached to $RELEASE_TAG; preserving the existing asset."
+            else
+              gh release upload "$RELEASE_TAG" "$artifact"
+            fi
+          done
