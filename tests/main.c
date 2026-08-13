@@ -9,6 +9,7 @@ void tlv_test_crypto(void);
 void tlv_test_identity(void);
 void tlv_test_topics(void);
 void tlv_test_wire(void);
+void tlv_test_ask(void);
 
 int main(void)
 {
@@ -18,6 +19,7 @@ int main(void)
     tlv_test_identity();
     tlv_test_topics();
     tlv_test_wire();
+    tlv_test_ask();
     printf("%d checks, %d failures\n", tlv_test_checks, tlv_test_failures);
     return tlv_test_failures == 0 ? 0 : 1;
 }
