@@ -13,8 +13,9 @@ protocol-specific:
   broker credentials), accepting the same field aliases as the Node and Go
   SDKs.
 - **`thalovant_topics`** — MQTT in/out/status topic derivation from the
-  identity's `topic_prefix`, plus connection endpoint/port parsing and
-  client-id derivation.
+  identity's `topic_prefix` (trimmed and validated: wildcards and control
+  characters are rejected, oversized topics never silently truncate), plus
+  connection endpoint/port parsing and client-id derivation.
 - **`thalovant_aes_gcm`** — self-contained AES-128-GCM (16-byte HiveMind
   nonces and 12-byte legacy nonces) with constant-time tag verification,
   validated against NIST vectors and known-answer vectors generated with

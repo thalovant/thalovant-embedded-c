@@ -32,8 +32,11 @@ typedef struct {
 } thalovant_mqtt_topics;
 
 /*
- * Derive the topic set for an identity. Returns THALOVANT_ERR_MISSING when
- * the identity has no MQTT credentials or an empty topic_prefix;
+ * Derive the topic set for an identity. The topic_prefix is normalized first
+ * (surrounding '/' then surrounding whitespace trimmed). Returns
+ * THALOVANT_ERR_MISSING when the identity has no MQTT credentials or the
+ * prefix is empty after trimming; THALOVANT_ERR_INVALID when the trimmed
+ * prefix contains an MQTT wildcard ('#' or '+') or a control character; and
  * THALOVANT_ERR_NOMEM when a derived topic overflows THALOVANT_TOPIC_MAX.
  */
 int thalovant_mqtt_topics_derive(const thalovant_identity *identity, thalovant_mqtt_topics *out);
