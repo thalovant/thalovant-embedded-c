@@ -1,28 +1,19 @@
 /*
- * MQTT topic derivation — a faithful port of `mqttTopicsForIdentity` and
- * `mqttConnectionEndpoint` from the Node SDK (src/transport-mqtt.ts).
+ * MQTT topic derivation for HiveMind satellites.
  *
- * Rules (in priority order):
- *  1. The satellite id is the access key, or — when `hash_topics` is set —
- *     the first 16 hex characters of sha256(access_key).
- *  2. Explicit `c2s_topic` + `s2c_topic` win verbatim; a missing
- *     `status_topic` is derived by swapping the "/c2s/" segment of the c2s
- *     topic for "/status/".
- *  3. Otherwise `topic_prefix` (leading/trailing '/' trimmed) is used:
- *     - if it already contains "/c2s/", "/s2c/", or "/status/" it names one
- *       topic of the set and the two siblings are derived by segment swap;
- *     - otherwise it is a base prefix: a trailing segment equal to the
- *       access key, MQTT username, or satellite id is dropped, and
- *       `hub_id` is appended unless already present as a path segment.
- *  4. With no prefix at all, `hub_id` yields the base "hivemind/<hub_id>".
- *  5. The topic set is then "<base>/{c2s,s2c,status}/<satellite_id>".
+ * The identity's `topic_prefix` is the full base for the device, plaintext
+ * (no hashing), of the form "hivemind/<hub-id>/<access-key>". Each channel
+ * is a plain suffix appended to it (leading/trailing '/' trimmed first):
+ *   - inbound  "<topic_prefix>/in"     — publish requests to the hub
+ *   - outbound "<topic_prefix>/out"    — subscribe for the hub's replies
+ *   - status   "<topic_prefix>/status" — retained presence / LWT
  *
  * Connection endpoint: `mqtt://` is upgraded to `mqtts://` when `tls` is
  * set, and a single trailing '/' is stripped.
  *
- * Status topic conventions (from the Node transport): publish "online"
- * retained at QoS 1 after connecting, register an "offline" retained
- * will, and publish "offline" retained on clean disconnect.
+ * Status topic conventions: publish "online" retained at QoS 1 after
+ * connecting, register an "offline" retained will, and publish "offline"
+ * retained on clean disconnect.
  */
 #ifndef THALOVANT_TOPICS_H
 #define THALOVANT_TOPICS_H
@@ -35,16 +26,15 @@
 #define THALOVANT_STATUS_OFFLINE "offline"
 
 typedef struct {
-    char c2s[THALOVANT_TOPIC_MAX];
-    char s2c[THALOVANT_TOPIC_MAX];
+    char inbound[THALOVANT_TOPIC_MAX];
+    char outbound[THALOVANT_TOPIC_MAX];
     char status[THALOVANT_TOPIC_MAX];
 } thalovant_mqtt_topics;
 
 /*
  * Derive the topic set for an identity. Returns THALOVANT_ERR_MISSING when
- * the identity has no MQTT credentials or when neither topic_prefix,
- * hub_id, nor explicit topics are available; THALOVANT_ERR_NOMEM when a
- * derived topic overflows THALOVANT_TOPIC_MAX.
+ * the identity has no MQTT credentials or an empty topic_prefix;
+ * THALOVANT_ERR_NOMEM when a derived topic overflows THALOVANT_TOPIC_MAX.
  */
 int thalovant_mqtt_topics_derive(const thalovant_identity *identity, thalovant_mqtt_topics *out);
 

@@ -37,7 +37,6 @@ static void test_api_fixture(void)
     CHECK_STR_EQ(identity.mqtt.password, "mqtt-pw");
     CHECK_STR_EQ(identity.mqtt.topic_prefix, "hivemind/hub-1");
     CHECK(identity.mqtt.tls);
-    CHECK(!identity.mqtt.hash_topics);
     CHECK_INT_EQ(identity.mqtt.qos, 1);
 }
 
@@ -48,8 +47,7 @@ static void test_aliases(void)
                      "\"host\":\"hub.local\",\"port\":\"8080\",\"uri_path\":\"/api/\","
                      "\"cryptoKey\":\"c\",\"publicKey\":\"pub\","
                      "\"mqtt\":{\"broker_url\":\"mqtt://b\",\"brokerUsername\":\"u\","
-                     "\"broker_password\":\"bp\",\"topicPrefix\":\"pre\",\"hubId\":\"h1\","
-                     "\"hashTopics\":\"yes\",\"qos\":0}"
+                     "\"broker_password\":\"bp\",\"topicPrefix\":\"pre\",\"qos\":0}"
                      "}";
     thalovant_identity identity;
     CHECK_INT_EQ(thalovant_identity_parse(js, strlen(js), &identity), THALOVANT_OK);
@@ -65,8 +63,6 @@ static void test_aliases(void)
     CHECK_STR_EQ(identity.mqtt.username, "u");
     CHECK_STR_EQ(identity.mqtt.password, "bp");
     CHECK_STR_EQ(identity.mqtt.topic_prefix, "pre");
-    CHECK_STR_EQ(identity.mqtt.hub_id, "h1");
-    CHECK(identity.mqtt.hash_topics);
     CHECK_INT_EQ(identity.mqtt.qos, 0);
     CHECK(!identity.mqtt.tls); /* mqtt:// scheme, no tls flag */
 }

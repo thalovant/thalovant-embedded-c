@@ -12,9 +12,9 @@ protocol-specific:
   Thalovant API (access key, crypto key, site id, hub endpoints, MQTT
   broker credentials), accepting the same field aliases as the Node and Go
   SDKs.
-- **`thalovant_topics`** — MQTT c2s/s2c/status topic derivation, byte-for-byte
-  identical to the Node SDK's `mqttTopicsForIdentity`, plus connection
-  endpoint/port parsing and client-id derivation.
+- **`thalovant_topics`** — MQTT in/out/status topic derivation from the
+  identity's `topic_prefix`, plus connection endpoint/port parsing and
+  client-id derivation.
 - **`thalovant_aes_gcm`** — self-contained AES-128-GCM (16-byte HiveMind
   nonces and 12-byte legacy nonces) with constant-time tag verification,
   validated against NIST vectors and known-answer vectors generated with
@@ -60,7 +60,7 @@ uint8_t key[16];
 thalovant_crypto_runtime_key(identity.crypto_key, key);
 
 /* connect your MQTT client to the derived endpoint...            */
-/* subscribe topics.s2c; publish "online" retained on topics.status */
+/* subscribe topics.outbound; publish "online" retained on topics.status */
 
 /* send an utterance */
 char frame[1024];
@@ -74,9 +74,9 @@ size_t sealed_len;
 thalovant_envelope_encrypt_binary(key, nonce, (uint8_t *)frame,
                                   strlen(frame), sealed, sizeof(sealed),
                                   &sealed_len);
-/* publish sealed on topics.c2s ... */
+/* publish sealed on topics.inbound ... */
 
-/* classify replies arriving on topics.s2c */
+/* classify replies arriving on topics.outbound */
 thalovant_ask_event event;
 thalovant_ask_classify(plaintext, plaintext_len, "req-1", &event);
 if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }

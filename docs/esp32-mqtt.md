@@ -67,7 +67,7 @@ esp_mqtt_client_handle_t client = esp_mqtt_client_init(&config);
 
 On `MQTT_EVENT_CONNECTED`:
 
-1. `esp_mqtt_client_subscribe(client, s_topics.s2c, s_identity.mqtt.qos)`
+1. `esp_mqtt_client_subscribe(client, s_topics.outbound, s_identity.mqtt.qos)`
 2. Publish `THALOVANT_STATUS_ONLINE` on `s_topics.status` (qos 1, retain)
 3. Send the plaintext hello (see below) sealed as a binary envelope.
 
@@ -91,7 +91,7 @@ static void publish_message(const thalovant_hive_message *msg)
     size_t sealed_len;
     thalovant_envelope_encrypt_binary(s_key, nonce, frame, frame_len,
                                       sealed, sizeof(sealed), &sealed_len);
-    esp_mqtt_client_publish(client, s_topics.c2s, (const char *)sealed,
+    esp_mqtt_client_publish(client, s_topics.inbound, (const char *)sealed,
                             (int)sealed_len, s_identity.mqtt.qos, 0);
 }
 
@@ -110,7 +110,7 @@ static void send_hello(void)
 
 ## 4. Receive frames
 
-On `MQTT_EVENT_DATA` (topic `s_topics.s2c`), payloads are encrypted binary
+On `MQTT_EVENT_DATA` (topic `s_topics.outbound`), payloads are encrypted binary
 envelopes; decode with the inverse pipeline:
 
 ```c
