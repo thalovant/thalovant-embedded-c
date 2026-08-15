@@ -48,8 +48,36 @@ int thalovant_mqtt_topics_derive(const thalovant_identity *identity, thalovant_m
     if (rc != THALOVANT_OK) {
         return rc;
     }
-    if (prefix[0] == '\0') {
+    /*
+     * Strip any surrounding whitespace the slash-trim left in place so a
+     * padded, empty, or whitespace-only prefix normalizes the same way as the
+     * Node/Go SDKs before it is validated below.
+     */
+    size_t len = strlen(prefix);
+    size_t start = 0;
+    while (start < len && isspace((unsigned char)prefix[start])) {
+        start++;
+    }
+    while (len > start && isspace((unsigned char)prefix[len - 1])) {
+        len--;
+    }
+    len -= start;
+    memmove(prefix, prefix + start, len);
+    prefix[len] = '\0';
+    if (len == 0) {
         return THALOVANT_ERR_MISSING;
+    }
+    /*
+     * A concrete publish/subscribe base must never carry an MQTT wildcard
+     * ('#' or '+') or a control character (incl. an embedded NUL): such a
+     * prefix would let a malformed identity subscribe far beyond its own
+     * channels or smuggle a terminator into the derived topics.
+     */
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)prefix[i];
+        if (c == '#' || c == '+' || c < 0x20) {
+            return THALOVANT_ERR_INVALID;
+        }
     }
 
     const struct {

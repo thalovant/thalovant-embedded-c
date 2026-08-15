@@ -49,6 +49,61 @@ static void test_prefix_trims_slashes(void)
                  "hivemind/hub-1/tlv-key-123/status");
 }
 
+static void test_prefix_trims_whitespace(void)
+{
+    thalovant_identity identity = base_identity();
+    strcpy(identity.mqtt.topic_prefix, "  hivemind/hub-1/tlv-key-123  ");
+    check_topics(&identity, "hivemind/hub-1/tlv-key-123/in", "hivemind/hub-1/tlv-key-123/out",
+                 "hivemind/hub-1/tlv-key-123/status");
+}
+
+static void test_prefix_whitespace_only(void)
+{
+    thalovant_identity identity = base_identity();
+    thalovant_mqtt_topics topics;
+    strcpy(identity.mqtt.topic_prefix, "   \t  ");
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_ERR_MISSING);
+}
+
+static void test_prefix_rejects_wildcards(void)
+{
+    thalovant_identity identity = base_identity();
+    thalovant_mqtt_topics topics;
+    strcpy(identity.mqtt.topic_prefix, "hivemind/#/tlv-key-123");
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_ERR_INVALID);
+    strcpy(identity.mqtt.topic_prefix, "hivemind/hub-1/+");
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_ERR_INVALID);
+}
+
+static void test_prefix_rejects_control_chars(void)
+{
+    thalovant_identity identity = base_identity();
+    thalovant_mqtt_topics topics;
+    /* An interior control byte (SOH) must be rejected, never embedded. */
+    strcpy(identity.mqtt.topic_prefix, "hivemind/hub-1/tlv\001key");
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_ERR_INVALID);
+}
+
+static void test_prefix_max_length(void)
+{
+    thalovant_identity identity = base_identity();
+    /* The longest prefix that fills THALOVANT_MQTT_TOPIC_PREFIX_MAX must still
+     * derive cleanly (no truncation): at the default limits prefix + "/status"
+     * fits THALOVANT_TOPIC_MAX. */
+    char longest[THALOVANT_MQTT_TOPIC_PREFIX_MAX];
+    memset(longest, 'a', sizeof(longest) - 1);
+    longest[sizeof(longest) - 1] = '\0';
+    strcpy(identity.mqtt.topic_prefix, longest);
+
+    thalovant_mqtt_topics topics;
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_OK);
+
+    char expected[THALOVANT_TOPIC_MAX];
+    snprintf(expected, sizeof(expected), "%s/status", longest);
+    CHECK_STR_EQ(topics.status, expected);
+    CHECK_INT_EQ(strlen(topics.status), strlen(longest) + 7);
+}
+
 static void test_missing_configuration(void)
 {
     thalovant_identity identity = base_identity();
@@ -116,6 +171,11 @@ void tlv_test_topics(void)
 {
     test_prefix_plain();
     test_prefix_trims_slashes();
+    test_prefix_trims_whitespace();
+    test_prefix_whitespace_only();
+    test_prefix_rejects_wildcards();
+    test_prefix_rejects_control_chars();
+    test_prefix_max_length();
     test_missing_configuration();
     test_endpoint();
     test_endpoint_parse();

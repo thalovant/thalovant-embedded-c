@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Harden `thalovant_mqtt_topics_derive` topic_prefix validation to match the
+  Node/Go SDKs: after the surrounding slashes are trimmed the prefix is also
+  whitespace-trimmed, an empty result returns `THALOVANT_ERR_MISSING`, and a
+  prefix carrying an MQTT wildcard (`#`/`+`) or a control character returns
+  `THALOVANT_ERR_INVALID`.
+- Add derived-topic boundary coverage: a max-length prefix derives without
+  truncation, and a dedicated reduced-`THALOVANT_TOPIC_MAX` test build
+  exercises the `THALOVANT_ERR_NOMEM` guard so a `<prefix>/status` that would
+  overflow `THALOVANT_TOPIC_MAX` is rejected rather than silently truncated.
+
 ## 0.1.1 - 2026-08-15
 
 - Automated patch release of the unreleased changes on `main` since v0.1.0.

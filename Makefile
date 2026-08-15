@@ -17,7 +17,13 @@ OBJS := $(SRCS:src/%.c=$(BUILD)/%.o)
 HDRS := $(wildcard include/thalovant/*.h)
 LIB  := $(BUILD)/libthalovant.a
 
-TEST_SRCS := $(wildcard tests/*.c)
+# The overflow test rebuilds src/topics.c with a reduced THALOVANT_TOPIC_MAX
+# and ships its own main(), so it is built as a separate binary rather than
+# linked into the shared suite.
+OVERFLOW_SRC := tests/test_topics_overflow.c
+OVERFLOW_BIN := $(BUILD)/thalovant-topics-overflow-tests
+
+TEST_SRCS := $(filter-out $(OVERFLOW_SRC),$(wildcard tests/*.c))
 TEST_BIN  := $(BUILD)/thalovant-tests
 
 .PHONY: all test clean
@@ -36,8 +42,12 @@ $(LIB): $(OBJS)
 $(TEST_BIN): $(TEST_SRCS) tests/harness.h $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(TEST_SRCS) $(LIB) -o $@
 
-test: $(TEST_BIN)
+$(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(OVERFLOW_SRC) -o $@
+
+test: $(TEST_BIN) $(OVERFLOW_BIN)
 	./$(TEST_BIN)
+	./$(OVERFLOW_BIN)
 
 clean:
 	rm -rf $(BUILD)
