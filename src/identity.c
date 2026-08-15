@@ -79,28 +79,9 @@ static int parse_mqtt(const char *js, const thalovant_json_tok *toks, int count,
     rc = get_string(js, toks, count, obj, ALIASES("topic_prefix", "topicPrefix"), 2,
                     mqtt->topic_prefix, sizeof(mqtt->topic_prefix));
     if (rc < 0 && rc != THALOVANT_ERR_MISSING) return rc;
-    rc = get_string(js, toks, count, obj, ALIASES("hub_id", "hubId"), 2, mqtt->hub_id,
-                    sizeof(mqtt->hub_id));
-    if (rc < 0 && rc != THALOVANT_ERR_MISSING) return rc;
-    rc = get_string(js, toks, count, obj, ALIASES("c2s_topic", "c2sTopic"), 2, mqtt->c2s_topic,
-                    sizeof(mqtt->c2s_topic));
-    if (rc < 0 && rc != THALOVANT_ERR_MISSING) return rc;
-    rc = get_string(js, toks, count, obj, ALIASES("s2c_topic", "s2cTopic"), 2, mqtt->s2c_topic,
-                    sizeof(mqtt->s2c_topic));
-    if (rc < 0 && rc != THALOVANT_ERR_MISSING) return rc;
-    rc = get_string(js, toks, count, obj, ALIASES("status_topic", "statusTopic"), 2,
-                    mqtt->status_topic, sizeof(mqtt->status_topic));
-    if (rc < 0 && rc != THALOVANT_ERR_MISSING) return rc;
-
-    mqtt->hash_topics = false;
-    int value = thalovant_json_object_get_alias(js, toks, count, obj,
-                                                ALIASES("hash_topics", "hashTopics"), 2);
-    if (value >= 0) {
-        mqtt->hash_topics = thalovant_json_as_bool(js, &toks[value], false);
-    }
 
     mqtt->qos = 1;
-    value = thalovant_json_object_get_alias(js, toks, count, obj, ALIASES("qos"), 1);
+    int value = thalovant_json_object_get_alias(js, toks, count, obj, ALIASES("qos"), 1);
     if (value >= 0) {
         long qos;
         if (thalovant_json_as_int(js, &toks[value], &qos) == THALOVANT_OK &&

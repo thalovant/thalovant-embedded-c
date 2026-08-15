@@ -11,11 +11,11 @@
  *   default_port    defaultPort | hub_http_port | port
  *   default_path    defaultPath | hub_http_path | path | uri_path
  *   public_key      publicKey
- *   mqtt.endpoint   broker_url | brokerUrl
- *   mqtt.username   broker_username | brokerUsername
- *   mqtt.password   broker_password | brokerPassword
- *   mqtt.*          snake_case | camelCase for topic_prefix, hub_id,
- *                   c2s_topic, s2c_topic, status_topic, hash_topics, qos
+ *   mqtt.endpoint     broker_url | brokerUrl
+ *   mqtt.username     broker_username | brokerUsername
+ *   mqtt.password     broker_password | brokerPassword
+ *   mqtt.topic_prefix topicPrefix
+ *   mqtt.qos, mqtt.tls  (no aliases)
  *
  * All parsing is allocation-free: values land in the fixed-size buffers
  * below (sizes tunable via thalovant/config.h).
@@ -37,14 +37,11 @@ typedef struct {
     char endpoint[THALOVANT_MQTT_ENDPOINT_MAX];
     char username[THALOVANT_MQTT_USERNAME_MAX];
     char password[THALOVANT_MQTT_PASSWORD_MAX];
+    /* Full base topic "hivemind/<hub-id>/<access-key>"; channels append
+     * "/in", "/out", "/status" (see thalovant/topics.h). */
     char topic_prefix[THALOVANT_MQTT_TOPIC_PREFIX_MAX];
-    char hub_id[THALOVANT_MQTT_HUB_ID_MAX];
-    char c2s_topic[THALOVANT_TOPIC_MAX];
-    char s2c_topic[THALOVANT_TOPIC_MAX];
-    char status_topic[THALOVANT_TOPIC_MAX];
-    bool hash_topics; /* default false */
-    int qos;          /* 0 or 1, default 1 */
-    bool tls;         /* default: endpoint starts with "mqtts://" */
+    int qos;  /* 0 or 1, default 1 */
+    bool tls; /* default: endpoint starts with "mqtts://" */
 } thalovant_mqtt_credentials;
 
 typedef struct {
