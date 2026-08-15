@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 - 2026-08-15
+
+- Automated patch release of the unreleased changes on `main` since v0.1.1.
+
 ## Unreleased
 
 - Harden `thalovant_mqtt_topics_derive` topic_prefix validation to match the
