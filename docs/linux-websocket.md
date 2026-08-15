@@ -18,7 +18,7 @@ thalovant_crypto_runtime_key(identity.crypto_key, key);
 /* WSS endpoint: from the identity's data-plane endpoints, or
  * default_master when it is already a ws(s):// URL. */
 char authorization[256];
-thalovant_wire_authorization("ThalovantEmbeddedC/0.1.0", identity.access_key,
+thalovant_wire_authorization("ThalovantEmbeddedC/0.1.1", identity.access_key,
                              authorization, sizeof(authorization));
 
 char url[512];

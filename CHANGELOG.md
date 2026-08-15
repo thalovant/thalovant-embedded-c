@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 - 2026-08-15
+
+- Automated patch release of the unreleased changes on `main` since v0.1.0.
+
 ## 0.1.0 - 2026-08-13
 
 Initial release.
