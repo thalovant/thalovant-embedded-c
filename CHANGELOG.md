@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - 2026-08-31
+
+- Classify the OVOS `ovos.intent.unmatched` bus event as an ask intent
+  failure (`THALOVANT_ASK_INTENT_FAILURE`), matching the sibling SDKs. OVOS
+  renamed Mycroft's `complete_intent_failure`; the legacy name is still
+  accepted for older runtimes. Fixes an utterance that matches no intent
+  waiting out the full ask timeout instead of surfacing the failure (#22).
+
 ## 0.1.2 - 2026-08-15
 
 - Automated patch release of the unreleased changes on `main` since v0.1.1.

@@ -15,7 +15,8 @@
  *  - SPEAK: collect the text (dedupe consecutive duplicates).
  *  - HANDLED ("ovos.utterance.handled"): the hub finished routing; keep
  *    waiting briefly for a speak reply if none arrived yet.
- *  - INTENT_FAILURE ("complete_intent_failure"): recorded as a failure
+ *  - INTENT_FAILURE ("complete_intent_failure" legacy Mycroft name, or
+ *    "ovos.intent.unmatched" current OVOS name): recorded as a failure
  *    event but does not terminate the wait by itself.
  *  - POLICY_DENIED ("hive.policy.denied") and QUERY_TIMEOUT
  *    ("hive.query.timeout"): terminal failures.
@@ -49,7 +50,7 @@ typedef enum {
     THALOVANT_ASK_IGNORE = 0,     /* unrelated frame or correlation mismatch */
     THALOVANT_ASK_SPEAK,          /* "speak" / "ovos.utterance.speak" */
     THALOVANT_ASK_HANDLED,        /* "ovos.utterance.handled" */
-    THALOVANT_ASK_INTENT_FAILURE, /* "complete_intent_failure" */
+    THALOVANT_ASK_INTENT_FAILURE, /* "complete_intent_failure" / "ovos.intent.unmatched" */
     THALOVANT_ASK_POLICY_DENIED,  /* "hive.policy.denied" */
     THALOVANT_ASK_QUERY_TIMEOUT,  /* "hive.query.timeout" */
 } thalovant_ask_kind;
