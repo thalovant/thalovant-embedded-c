@@ -110,10 +110,20 @@ static void test_classify_terminal_events(void)
     CHECK_INT_EQ(event.kind, THALOVANT_ASK_HANDLED);
     CHECK(!event.is_failure);
 
+    /* Legacy Mycroft name still classifies as an intent failure. */
     const char *intent_failure =
         "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"complete_intent_failure\",\"data\":{},"
         "\"context\":{\"request_id\":\"req-1\"}}}";
     CHECK_INT_EQ(classify(intent_failure, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_ASK_INTENT_FAILURE);
+    CHECK(event.is_failure);
+
+    /* Current OVOS name (ovos.intent.unmatched) maps to the same failure so
+     * an unmatched utterance is surfaced instead of waiting out the timeout. */
+    const char *unmatched =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.unmatched\",\"data\":{},"
+        "\"context\":{\"request_id\":\"req-1\"}}}";
+    CHECK_INT_EQ(classify(unmatched, "req-1", &event), THALOVANT_OK);
     CHECK_INT_EQ(event.kind, THALOVANT_ASK_INTENT_FAILURE);
     CHECK(event.is_failure);
 

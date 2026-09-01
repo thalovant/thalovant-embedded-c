@@ -187,7 +187,11 @@ int thalovant_ask_classify(const char *frame_json, size_t len, const char *reque
         kind = THALOVANT_ASK_SPEAK;
     } else if (thalovant_json_str_eq(frame_json, &toks[type], "ovos.utterance.handled")) {
         kind = THALOVANT_ASK_HANDLED;
-    } else if (thalovant_json_str_eq(frame_json, &toks[type], "complete_intent_failure")) {
+    } else if (thalovant_json_str_eq(frame_json, &toks[type], "complete_intent_failure") ||
+               thalovant_json_str_eq(frame_json, &toks[type], "ovos.intent.unmatched")) {
+        /* Legacy Mycroft name ("complete_intent_failure") vs current OVOS
+         * name ("ovos.intent.unmatched"); both mean the utterance matched no
+         * intent. Keep the legacy name for older runtimes. */
         kind = THALOVANT_ASK_INTENT_FAILURE;
     } else if (thalovant_json_str_eq(frame_json, &toks[type], "hive.policy.denied")) {
         kind = THALOVANT_ASK_POLICY_DENIED;
