@@ -16,6 +16,11 @@ typedef enum {
     THALOVANT_ERR_AUTH = -5,
     /* Valid but unsupported input (e.g. compressed binary frames). */
     THALOVANT_ERR_UNSUPPORTED = -6,
+    /*
+     * The hub answered hive.policy.denied: this connection may not publish
+     * the message type it sent (see thalovant_intent_event.denied_type).
+     */
+    THALOVANT_ERR_POLICY_DENIED = -7,
 } thalovant_err;
 
 /* Human-readable name for an error code (never NULL). */

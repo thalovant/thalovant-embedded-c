@@ -95,4 +95,45 @@ bool thalovant_json_is_truthy(const char *js, const thalovant_json_tok *tok);
  */
 void thalovant_json_raw_span(const thalovant_json_tok *tok, int *start, int *end);
 
+/* ------------------------------------------------------- shallow scans */
+
+/*
+ * Shallow scans read one value at a time without a token pool, so a reply
+ * carrying an array of any length (the hub's intent manifest, for one) is
+ * walked in bounded memory: the token describes the value's type and span
+ * only, `size` counts its direct children, and `parent` is -1. The string
+ * and primitive grammars are the tokenizer's, so the token helpers above
+ * (thalovant_json_unescape, thalovant_json_as_string, ...) accept the
+ * result. Nested containers are not validated beyond bracket balance until
+ * they are scanned themselves; walking a container with the two iterators
+ * below does validate its members' separators, so malformed input is
+ * refused rather than handed on.
+ */
+
+/*
+ * Scan the value that starts at `pos` (leading whitespace skipped) into
+ * `tok`. Returns the byte offset one past the value, or THALOVANT_ERR_JSON.
+ */
+int thalovant_json_scan(const char *js, size_t len, size_t pos, thalovant_json_tok *tok);
+
+/*
+ * The value of `key` in the object `obj` (a token from thalovant_json_scan
+ * or the tokenizer), into `value`. THALOVANT_ERR_MISSING when the key is
+ * absent; a JSON null is returned as a primitive, not treated as missing.
+ * Members must be separated by exactly one comma: a missing, doubled, or
+ * trailing comma yields THALOVANT_ERR_JSON.
+ */
+int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const char *key,
+                            thalovant_json_tok *value);
+
+/*
+ * Iterate the elements of the array `arr`. Start with `*cursor` at 0 and
+ * call until it returns 0: each call that returns 1 has filled `elem` with
+ * the next element. Elements must be separated by exactly one comma, so a
+ * missing, doubled, or trailing comma yields THALOVANT_ERR_JSON, as does
+ * any other syntax error.
+ */
+int thalovant_json_scan_next(const char *js, const thalovant_json_tok *arr, size_t *cursor,
+                             thalovant_json_tok *elem);
+
 #endif /* THALOVANT_JSON_H */

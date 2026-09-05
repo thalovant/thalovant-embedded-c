@@ -18,7 +18,7 @@ thalovant_crypto_runtime_key(identity.crypto_key, key);
 /* WSS endpoint: from the identity's data-plane endpoints, or
  * default_master when it is already a ws(s):// URL. */
 char authorization[256];
-thalovant_wire_authorization("ThalovantEmbeddedC/0.1.3", identity.access_key,
+thalovant_wire_authorization("ThalovantEmbeddedC/0.2.0", identity.access_key,
                              authorization, sizeof(authorization));
 
 char url[512];
@@ -83,7 +83,9 @@ static void handle_frame(const char *json, size_t len)
     if (handshake_complete && strcmp(frame.msg_type, "bus") == 0) {
         thalovant_ask_event event;
         thalovant_ask_classify(json, len, current_request_id, &event);
-        /* drive the ask state machine — see docs/esp32-mqtt.md §5 */
+        /* drive the ask state machine — see docs/esp32-mqtt.md §5; the
+         * same frame feeds thalovant_intent_classify() for the intent
+         * inventory — see docs/esp32-mqtt.md §6 */
     }
 }
 ```
@@ -107,6 +109,9 @@ static void send_frame(char *frame_json, size_t frame_len)
     int envelope_len = thalovant_envelope_encrypt_json(
         key, nonce, (uint8_t *)frame_json, frame_len,
         envelope, sizeof(envelope));
+    if (envelope_len < 0) {
+        return;                 /* THALOVANT_ERR_NOMEM: envelope[] too small */
+    }
     ws_send_text(envelope, (size_t)envelope_len);
 }
 
@@ -115,6 +120,9 @@ char frame[1024];
 thalovant_ask_request ask = { "turn on the lights", "en-us",
                               session_id, identity.site_id, request_id };
 int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
+if (frame_len < 0) {
+    return;                     /* THALOVANT_ERR_NOMEM: nothing to send */
+}
 send_frame(frame, (size_t)frame_len);
 ```
 

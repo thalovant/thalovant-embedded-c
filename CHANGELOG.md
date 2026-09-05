@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.2.0 - 2026-09-05
+
+- Add the intent inventory (`thalovant_intents`): a satellite asks its hub
+  what can be said over its own session, with no control-plane credential,
+  from the runtime's intent manifest (OVOS-INTENT-4 §10).
+  `thalovant_intent_list_build_payload`/`_frame` send `ovos.intent.list` for
+  a language (`include_definitions` asks the runtime to attach each row's
+  definition); `thalovant_intent_describe_build_payload`/`_frame` send
+  `ovos.intent.describe` for one registration. Both carry the request id
+  and language in the context the way the ask frame does, so the hub echoes
+  them back.
+- Add `thalovant_intent_classify`, the reply classifier alongside
+  `thalovant_ask_classify`: `ovos.intent.list.response`,
+  `ovos.intent.describe.response` and `hive.policy.denied`, correlated by
+  `context.request_id`. A reply carrying another request's id is ignored; one
+  carrying none is delivered with an empty `request_id` so a describe can be
+  matched by the definition's own `skill_id`/`intent_name`/`lang`, as the
+  contract asks of a hub that does not echo the id. A bare bus payload (the
+  binary frame decoder's output) is accepted as well as the full frame.
+- Rows, definitions and sample sentences stream through callbacks into
+  caller-owned structs — `thalovant_intent_list_rows`,
+  `thalovant_intent_definitions`, `thalovant_intent_samples` — so a manifest
+  of any size is walked in bounded memory; no aggregate is built and nothing
+  allocates. `method` `template`/`keyword` map to engines
+  `THALOVANT_INTENT_ENGINE_PADATIOUS`/`_ADAPT`; a sample flags whether it
+  carries a `{slot}`. `thalovant_intent_same_language` compares tags
+  case-insensitively with `_`/`-` folded (`fr-fr` is answered as `fr-FR`).
+- Recognise `hive.policy.denied` as its own outcome: the event carries
+  `denied_type`, `code` (`THALOVANT_POLICY_CODE_ACL_DISALLOWED_TYPE`),
+  `reason` and the raw `allowed` list, and the walkers return the new
+  `THALOVANT_ERR_POLICY_DENIED`, so a refused query surfaces at once instead
+  of waiting out a timeout.
+- Add the event-name constants (`THALOVANT_EVENT_INTENT_LIST`,
+  `..._LIST_RESPONSE`, `..._DESCRIBE`, `..._DESCRIBE_RESPONSE`,
+  `THALOVANT_EVENT_POLICY_DENIED`, and the engines' manifest names
+  `THALOVANT_EVENT_ADAPT_MANIFEST[_GET]`/`THALOVANT_EVENT_PADATIOUS_MANIFEST[_GET]`).
+  The names-only engine-manifest fallback of the desktop SDKs is not driven
+  by this library; the constants let an integrator send it as a plain bus
+  frame.
+- Add shallow JSON scans to `thalovant_json`: `thalovant_json_scan`,
+  `thalovant_json_scan_key` and `thalovant_json_scan_next` read one value at
+  a time without a token pool (the tokenizer's string and primitive grammar,
+  shared), for payloads larger than `THALOVANT_WIRE_MAX_TOKENS` can hold.
+  Walking a container validates its separators — exactly one comma between
+  members, none before the closing bracket — so malformed input is refused
+  with `THALOVANT_ERR_JSON` instead of being handed to a caller.
+- New `config.h` limits: `THALOVANT_LANG_MAX`, `THALOVANT_EVENT_NAME_MAX`,
+  `THALOVANT_INTENT_SKILL_ID_MAX`, `THALOVANT_INTENT_NAME_MAX`,
+  `THALOVANT_INTENT_METHOD_MAX`, `THALOVANT_INTENT_SESSION_ID_MAX`,
+  `THALOVANT_INTENT_SAMPLE_MAX`, `THALOVANT_INTENT_ERROR_MAX`,
+  `THALOVANT_POLICY_CODE_MAX`, `THALOVANT_POLICY_REASON_MAX`. A field over
+  its limit is refused with `THALOVANT_ERR_NOMEM`, never truncated.
+
 ## 0.1.3 - 2026-08-31
 
 - Classify the OVOS `ovos.intent.unmatched` bus event as an ask intent
