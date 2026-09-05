@@ -287,9 +287,9 @@ case THALOVANT_INTENT_LIST_RESPONSE:
 case THALOVANT_INTENT_POLICY_DENIED:
     /* This connection may not publish reply.denied_type: give up now
      * rather than waiting out the timeout. thalovant_intent_allowed_types()
-     * walks the types it may publish (the list's string entries only: a
-     * number or a null there is not a message type); the dashboard's
-     * connection settings fix it. */
+     * walks the types it may publish (non-empty string entries only,
+     * trimmed: a number, a null, or a blank there is not a message type);
+     * the dashboard's connection settings fix it. */
     thalovant_intent_allowed_types(&reply, on_allowed_type, NULL);
     break;
 default:

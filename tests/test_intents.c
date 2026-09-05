@@ -446,12 +446,14 @@ static void test_the_allowed_list_holds_only_message_types(void)
         "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":"
         "{\"denied_type\":\"ovos.intent.list\",\"code\":\"acl_disallowed_type\",\"reason\":"
         "\"ovos.intent.list not in allowed_types\",\"data\":{\"msg_type\":\"ovos.intent.list\","
-        "\"allowed\":[\"speak\",3,null,{\"type\":\"speak\"},[\"speak\"],true,"
-        "\"recognizer_loop:utterance\"]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
+        "\"allowed\":[\"speak\",3,null,{\"type\":\"speak\"},[\"speak\"],true,\"\",\"   \","
+        "\"\\t \",\"  recognizer_loop:utterance  \"]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
     thalovant_intent_event event;
     CHECK_INT_EQ(classify(denied, "req-1", &event), THALOVANT_OK);
     CHECK_INT_EQ(event.kind, THALOVANT_INTENT_POLICY_DENIED);
-    /* The count is the number of message types, not of JSON elements. */
+    /* The count is the number of message types, not of JSON elements: the
+     * blank entries are no more a type than the number is, and the rest
+     * come back trimmed. */
     CHECK_INT_EQ(event.allowed_count, 2);
     allowed_log log = { 0, "" };
     CHECK_INT_EQ(thalovant_intent_allowed_types(&event, log_allowed, &log), 2);
@@ -462,7 +464,7 @@ static void test_the_allowed_list_holds_only_message_types(void)
     const char *nothing_usable =
         "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":"
         "{\"denied_type\":\"ovos.intent.list\",\"code\":\"acl_disallowed_type\","
-        "\"data\":{\"allowed\":[3,null]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
+        "\"data\":{\"allowed\":[3,null,\"\",\"  \"]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
     CHECK_INT_EQ(classify(nothing_usable, "req-1", &event), THALOVANT_OK);
     CHECK_INT_EQ(event.kind, THALOVANT_INTENT_POLICY_DENIED);
     CHECK_STR_EQ(event.denied_type, THALOVANT_EVENT_INTENT_LIST);

@@ -170,8 +170,8 @@ typedef struct {
     /* POLICY_DENIED: the type this connection may not publish, the code
      * (THALOVANT_POLICY_CODE_ACL_DISALLOWED_TYPE), the reason, and the raw
      * JSON slice of data.data.allowed -- the types it may -- with the number
-     * of *string* entries in it, which is what thalovant_intent_allowed_types
-     * delivers. A list holding nothing usable, or one too malformed to walk,
+     * of non-empty string entries in it, which is what
+     * thalovant_intent_allowed_types delivers. A list holding nothing usable, or one too malformed to walk,
      * leaves allowed_json NULL and allowed_count 0; the denial itself still
      * names denied_type, code and reason. */
     char denied_type[THALOVANT_EVENT_NAME_MAX];
@@ -281,11 +281,12 @@ int thalovant_intent_samples(const char *definition_json, size_t len,
 
 /*
  * Deliver each message type a THALOVANT_INTENT_POLICY_DENIED event says the
- * connection may publish. Only the list's string entries are delivered: a
- * number or a null there is not a message type, and naming one would send
- * an operator reading which types to allow after "3" or "null". Returns the
- * number delivered (0 when the denial named none), THALOVANT_ERR_INVALID
- * for any other kind of event, THALOVANT_ERR_NOMEM for a type longer than
+ * connection may publish. The list carries only non-empty string entries,
+ * trimmed: a number or a null there is not a message type, and neither is
+ * "" or "  ", and naming one would send an operator reading which types to
+ * allow after "3", "null", or nothing at all. Returns the number delivered
+ * (0 when the denial named none), THALOVANT_ERR_INVALID for any other kind
+ * of event, THALOVANT_ERR_NOMEM for a type longer than
  * THALOVANT_EVENT_NAME_MAX, and THALOVANT_ERR_JSON for a malformed list.
  */
 int thalovant_intent_allowed_types(const thalovant_intent_event *event,

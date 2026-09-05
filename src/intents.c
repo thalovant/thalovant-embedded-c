@@ -242,11 +242,12 @@ static thalovant_intent_engine engine_of(const char *method)
 /* --------------------------------------------------------- allow-list */
 
 /*
- * Walk a denial's `allowed` array, delivering its string entries. A number
- * or a null in the list is not a message type: naming one would send an
- * operator reading which types to allow after "3" or "null", so they are
- * passed over. `fn` NULL counts them without copying anything out.
- * Returns the number of string entries, or a negative error.
+ * Walk a denial's `allowed` array, delivering its non-empty string entries,
+ * whitespace-trimmed. A number or a null in the list is not a message type,
+ * and neither is "" or "  ": naming one would send an operator reading
+ * which types to allow after "3", "null", or nothing at all, so they are
+ * passed over. `fn` NULL counts them without delivering. Returns the number
+ * of message types, or a negative error.
  */
 static int walk_allowed(const char *js, size_t len, int count, thalovant_intent_allowed_fn fn,
                         void *user)
@@ -260,18 +261,25 @@ static int walk_allowed(const char *js, size_t len, int count, thalovant_intent_
         if (item.type != THALOVANT_JSON_STRING) {
             continue;
         }
-        if (fn == NULL) {
+        /* thalovant_json_as_string unescapes and trims, so a blank entry
+         * comes back empty however it was written. */
+        thalovant_intent_allowed_type allowed;
+        int n = thalovant_json_as_string(js, &item, allowed.type, sizeof(allowed.type));
+        if (n == THALOVANT_ERR_NOMEM && fn == NULL) {
+            /* Too long to copy is still a type. Count it, and leave the
+             * refusal to truncate to the walk that delivers. */
             delivered++;
             continue;
         }
-        thalovant_intent_allowed_type allowed;
-        int n = thalovant_json_as_string(js, &item, allowed.type, sizeof(allowed.type));
         if (n < 0) {
             return n;
         }
+        if (n == 0) {
+            continue;
+        }
         allowed.index = delivered;
         delivered++;
-        if (!fn(&allowed, user)) {
+        if (fn != NULL && !fn(&allowed, user)) {
             return delivered;
         }
     }

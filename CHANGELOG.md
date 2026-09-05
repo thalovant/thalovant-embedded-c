@@ -12,14 +12,16 @@
   the hub does not know that registration, so the intent simply has no
   sentences. Reported by the Kotlin port's review (thalovant-python-sdk#34).
 - Add `thalovant_intent_allowed_types`, the walker for the message types a
-  `hive.policy.denied` says the connection may publish. It delivers the
-  list's string entries only: a number or a null there is not a message
-  type, and naming one would send an operator reading which types to allow
-  after `"3"` or `"null"`. `thalovant_intent_event.allowed_count` now counts
-  those string entries rather than every JSON element, and a list naming no
-  type — or one too malformed to walk — leaves `allowed_json` NULL with the
-  denial still standing on `denied_type`, `code` and `reason`. Reported by
-  the Kotlin port's review (thalovant-python-sdk#34).
+  `hive.policy.denied` says the connection may publish. The list carries
+  only non-empty string entries, trimmed: a number or a null there is not a
+  message type, and neither is `""` or `"  "`, and naming one would send an
+  operator reading which types to allow after `"3"`, `"null"`, or nothing at
+  all. `thalovant_intent_event.allowed_count` now counts those entries
+  rather than every JSON element, and a list naming no type — or one too
+  malformed to walk — leaves `allowed_json` NULL with the denial still
+  standing on `denied_type`, `code` and `reason`. Reported by the Kotlin
+  port's review (thalovant-python-sdk#34) and its follow-up on the blanks
+  (thalovant-python-sdk#35).
 - Document what a connection's allow-list must hold for the inventory:
   `ovos.intent.list` to read the manifest, and `ovos.intent.describe` only
   when it goes on to ask for the sentences behind a registration.
