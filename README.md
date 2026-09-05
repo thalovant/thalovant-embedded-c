@@ -108,10 +108,14 @@ static bool on_row(const thalovant_intent_registration *row, void *user)
     return true;                      /* false stops the walk */
 }
 
+static bool answered;                 /* reset when the query is sent */
+
 thalovant_intent_event reply;
 thalovant_intent_classify(plaintext, plaintext_len, "req-2", &reply);
 switch (reply.kind) {
-case THALOVANT_INTENT_LIST_RESPONSE:  /* take the first reply, ignore repeats */
+case THALOVANT_INTENT_LIST_RESPONSE:
+    if (answered) break;              /* the hub delivers every reply twice */
+    answered = true;
     thalovant_intent_list_rows(&reply, on_row, NULL);
     break;
 case THALOVANT_INTENT_POLICY_DENIED:  /* reply.denied_type names the query */

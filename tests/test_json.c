@@ -252,6 +252,71 @@ static void test_scan_syntax_errors(void)
     CHECK_INT_EQ(thalovant_json_scan_key(bare, &tok, "a", &value), THALOVANT_ERR_JSON);
 }
 
+static void test_scan_requires_separators(void)
+{
+    /* Bracket balance alone would accept these: the members are only
+     * validated as they are walked, and a hub is not a trusted source, so
+     * a missing, doubled, or trailing comma must be refused rather than
+     * handed to a caller as a span of malformed input. */
+    thalovant_json_tok tok;
+    thalovant_json_tok value;
+
+    const char *no_comma = "{\"a\":1 \"b\":2}";
+    CHECK(thalovant_json_scan(no_comma, strlen(no_comma), 0, &tok) > 0);
+    /* The first key is still readable; the malformed member after it is not. */
+    CHECK_INT_EQ(thalovant_json_scan_key(no_comma, &tok, "a", &value), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_json_scan_key(no_comma, &tok, "b", &value), THALOVANT_ERR_JSON);
+
+    const char *doubled = "{\"a\":1,,\"b\":2}";
+    CHECK(thalovant_json_scan(doubled, strlen(doubled), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(doubled, &tok, "b", &value), THALOVANT_ERR_JSON);
+    const char *leading = "{,\"a\":1}";
+    CHECK(thalovant_json_scan(leading, strlen(leading), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(leading, &tok, "a", &value), THALOVANT_ERR_JSON);
+    const char *trailing_member = "{\"a\":1,}";
+    CHECK(thalovant_json_scan(trailing_member, strlen(trailing_member), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(trailing_member, &tok, "b", &value),
+                 THALOVANT_ERR_JSON);
+
+    size_t cursor;
+    thalovant_json_tok elem;
+    const char *no_comma_array = "[1 2]";
+    CHECK(thalovant_json_scan(no_comma_array, strlen(no_comma_array), 0, &tok) > 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(no_comma_array, &tok, &cursor, &elem), 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(no_comma_array, &tok, &cursor, &elem),
+                 THALOVANT_ERR_JSON);
+
+    const char *trailing = "[1,]";
+    CHECK(thalovant_json_scan(trailing, strlen(trailing), 0, &tok) > 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(trailing, &tok, &cursor, &elem), 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(trailing, &tok, &cursor, &elem), THALOVANT_ERR_JSON);
+
+    const char *doubled_array = "[1,,2]";
+    CHECK(thalovant_json_scan(doubled_array, strlen(doubled_array), 0, &tok) > 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(doubled_array, &tok, &cursor, &elem), 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(doubled_array, &tok, &cursor, &elem),
+                 THALOVANT_ERR_JSON);
+    const char *leading_array = "[,1]";
+    CHECK(thalovant_json_scan(leading_array, strlen(leading_array), 0, &tok) > 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(leading_array, &tok, &cursor, &elem),
+                 THALOVANT_ERR_JSON);
+
+    /* Whitespace around a real separator is still fine. */
+    const char *spaced = "[ 1 , 2 ]";
+    CHECK(thalovant_json_scan(spaced, strlen(spaced), 0, &tok) > 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(spaced, &tok, &cursor, &elem), 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(spaced, &tok, &cursor, &elem), 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(spaced, &tok, &cursor, &elem), 0);
+    const char *spaced_obj = "{ \"a\" : 1 , \"b\" : 2 }";
+    CHECK(thalovant_json_scan(spaced_obj, strlen(spaced_obj), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(spaced_obj, &tok, "b", &value), THALOVANT_OK);
+}
+
 void tlv_test_json(void)
 {
     test_basic_parse();
@@ -263,4 +328,5 @@ void tlv_test_json(void)
     test_scan_values();
     test_scan_matches_tokenizer_on_big_arrays();
     test_scan_syntax_errors();
+    test_scan_requires_separators();
 }

@@ -677,6 +677,7 @@ int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const
     }
     size_t end = (size_t)obj->end;
     size_t pos = (size_t)obj->start + 1;
+    bool first = true;
     for (;;) {
         pos = skip_ws_at(js, end, pos);
         if (pos >= end) {
@@ -685,10 +686,21 @@ int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const
         if (js[pos] == '}') {
             return THALOVANT_ERR_MISSING;
         }
-        if (js[pos] == ',') {
-            pos++;
-            continue;
+        if (!first) {
+            /* Members are comma-separated: after one, the object either
+             * closes (handled above) or exactly one comma introduces the
+             * next. Anything else is malformed. */
+            if (js[pos] != ',') {
+                return THALOVANT_ERR_JSON;
+            }
+            pos = skip_ws_at(js, end, pos + 1);
+            if (pos >= end) {
+                return THALOVANT_ERR_JSON;
+            }
         }
+        first = false;
+        /* A member starts with its key, so this also rejects a leading
+         * comma, a doubled comma, and a trailing comma before '}'. */
         if (js[pos] != '"') {
             return THALOVANT_ERR_JSON;
         }
@@ -720,17 +732,27 @@ int thalovant_json_scan_next(const char *js, const thalovant_json_tok *arr, size
         return THALOVANT_ERR_INVALID;
     }
     size_t end = (size_t)arr->end;
-    size_t pos = *cursor == 0 ? (size_t)arr->start + 1 : *cursor;
-    pos = skip_ws_at(js, end, pos);
-    if (pos < end && js[pos] == ',') {
-        pos = skip_ws_at(js, end, pos + 1);
-    }
+    bool first = *cursor == 0;
+    size_t pos = skip_ws_at(js, end, first ? (size_t)arr->start + 1 : *cursor);
     if (pos >= end) {
         return THALOVANT_ERR_JSON;
     }
     if (js[pos] == ']') {
+        /* The end of the array; calling again from here stays here. */
         *cursor = pos;
         return 0;
+    }
+    if (!first) {
+        /* Elements are comma-separated: after one, the array either closes
+         * (handled above) or exactly one comma introduces the next. */
+        if (js[pos] != ',') {
+            return THALOVANT_ERR_JSON;
+        }
+        pos = skip_ws_at(js, end, pos + 1);
+        /* A trailing comma before ']' and a doubled comma are malformed. */
+        if (pos >= end || js[pos] == ']' || js[pos] == ',') {
+            return THALOVANT_ERR_JSON;
+        }
     }
     int next = thalovant_json_scan(js, end, pos, elem);
     if (next < 0) {

@@ -184,17 +184,33 @@ own session, with no control-plane credential. The queries are bus frames
 built like the ask frame and sealed the same way; the replies come back on
 `s_topics.outbound` and are correlated by the request id.
 
+One query at a time is enough for a satellite: keep its request id and
+whether it has been answered together, and start both when you send it.
+
 ```c
+/* the state of the inventory query in flight */
+static struct {
+    char request_id[THALOVANT_REQUEST_ID_MAX];
+    bool answered;                       /* the hub delivers replies twice */
+} s_inventory;
+
 /* 1. ovos.intent.list for one language */
-thalovant_intent_list_request list = {
-    .lang = "en-us",
-    .session_id = session_id,
-    .site_id = s_identity.site_id,
-    .request_id = "req-list-1",          /* unique per query */
-    .include_definitions = true,         /* a runtime may attach the sentences */
-};
-thalovant_intent_list_build_frame(&list, frame_json, sizeof(frame_json));
-/* wrap with encode_binary + encrypt_binary and publish, as for ask */
+static void ask_what_can_be_said(void)
+{
+    snprintf(s_inventory.request_id, sizeof(s_inventory.request_id),
+             "thalovant-request-%08x", (unsigned)esp_random());
+    s_inventory.answered = false;        /* per request, never once per boot */
+
+    thalovant_intent_list_request list = {
+        .lang = "en-us",
+        .session_id = session_id,
+        .site_id = s_identity.site_id,
+        .request_id = s_inventory.request_id,
+        .include_definitions = true,     /* a runtime may attach the sentences */
+    };
+    thalovant_intent_list_build_frame(&list, frame_json, sizeof(frame_json));
+    /* wrap with encode_binary + encrypt_binary and publish, as for ask */
+}
 ```
 
 For each decoded `bus` frame, hand the JSON to the classifier. The frame
@@ -226,19 +242,19 @@ static bool on_row(const thalovant_intent_registration *row, void *user)
     return true;                        /* false stops the walk early */
 }
 
-static bool answered;                   /* per request id */
-
 thalovant_intent_event reply;
-if (thalovant_intent_classify(json, json_len, "req-list-1", &reply)
+if (thalovant_intent_classify(json, json_len, s_inventory.request_id, &reply)
         != THALOVANT_OK) {
-    return;
+    return;                             /* malformed frame */
 }
 switch (reply.kind) {
 case THALOVANT_INTENT_LIST_RESPONSE:
-    if (answered) break;                /* the hub delivers replies twice */
-    answered = true;
+    if (s_inventory.answered) break;    /* a repeat of the reply we took */
+    s_inventory.answered = true;
     if (!reply.ok) { /* reply.error */ break; }
-    thalovant_intent_list_rows(&reply, on_row, NULL);   /* returns the count */
+    /* Returns the row count, or a negative error: a walk that meets
+     * malformed JSON stops there and says so. */
+    thalovant_intent_list_rows(&reply, on_row, NULL);
     break;
 case THALOVANT_INTENT_POLICY_DENIED:
     /* This connection may not publish reply.denied_type: give up now

@@ -633,6 +633,33 @@ static void test_field_limits(void)
                  THALOVANT_ERR_NOMEM);
 }
 
+static void test_malformed_manifest_is_refused(void)
+{
+    /* A frame whose rows are not comma-separated: the walk stops at the
+     * malformed separator and reports it rather than handing the callback
+     * rows read out of unvalidated input. */
+    const char *frame =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
+        "{\"ok\":true,\"intents\":[" WEATHER_ROW("en-us") " " SHADOW_ROW("en-us") "]},"
+        ECHOED_CONTEXT("req-1", "en-us") "}}";
+    thalovant_intent_event event;
+    CHECK_INT_EQ(classify(frame, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_LIST_RESPONSE);
+    row_log log = { 0 };
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(log.rows, 1);
+    CHECK_STR_EQ(log.first.skill_id, WEATHER);
+
+    /* Likewise a trailing comma in a definition's samples. */
+    const char *definition =
+        "{\"skill_id\":\"" WEATHER "\",\"intent_name\":\"current.weather\",\"lang\":"
+        "\"en-us\",\"samples\":[\"what is the weather\",]}";
+    sample_log samples = { 0, 0, "" };
+    CHECK_INT_EQ(thalovant_intent_samples(definition, strlen(definition), log_sample, &samples),
+                 THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(samples.count, 1);
+}
+
 void tlv_test_intents(void)
 {
     test_build_list_query();
@@ -649,4 +676,5 @@ void tlv_test_intents(void)
     test_ignored_frames();
     test_large_manifest_streams();
     test_field_limits();
+    test_malformed_manifest_is_refused();
 }

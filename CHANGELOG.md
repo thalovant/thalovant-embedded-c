@@ -43,6 +43,9 @@
   `thalovant_json_scan_key` and `thalovant_json_scan_next` read one value at
   a time without a token pool (the tokenizer's string and primitive grammar,
   shared), for payloads larger than `THALOVANT_WIRE_MAX_TOKENS` can hold.
+  Walking a container validates its separators — exactly one comma between
+  members, none before the closing bracket — so malformed input is refused
+  with `THALOVANT_ERR_JSON` instead of being handed to a caller.
 - New `config.h` limits: `THALOVANT_LANG_MAX`, `THALOVANT_EVENT_NAME_MAX`,
   `THALOVANT_INTENT_SKILL_ID_MAX`, `THALOVANT_INTENT_NAME_MAX`,
   `THALOVANT_INTENT_METHOD_MAX`, `THALOVANT_INTENT_SESSION_ID_MAX`,
