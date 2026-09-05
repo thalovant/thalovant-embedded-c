@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 - 2026-09-05
+
+- `thalovant_intent_list_rows` returns the new `THALOVANT_ERR_HUB_REFUSED`
+  for an `ovos.intent.list.response` that says `{"ok": false, "error": ...}`,
+  where it used to return the same zero rows an empty manifest returns. A
+  refused listing has told us nothing, and walking it as no intents showed a
+  person a device that can do nothing; the hub's own words are in
+  `thalovant_intent_event.error`. `thalovant_intent_definitions` keeps
+  returning 0 for a describe that says `ok: false`, which is a real answer —
+  the hub does not know that registration, so the intent simply has no
+  sentences. Reported by the Kotlin port's review (thalovant-python-sdk#34).
+- Add `thalovant_intent_allowed_types`, the walker for the message types a
+  `hive.policy.denied` says the connection may publish. It delivers the
+  list's string entries only: a number or a null there is not a message
+  type, and naming one would send an operator reading which types to allow
+  after `"3"` or `"null"`. `thalovant_intent_event.allowed_count` now counts
+  those string entries rather than every JSON element, and a list naming no
+  type — or one too malformed to walk — leaves `allowed_json` NULL with the
+  denial still standing on `denied_type`, `code` and `reason`. Reported by
+  the Kotlin port's review (thalovant-python-sdk#34).
+- Document what a connection's allow-list must hold for the inventory:
+  `ovos.intent.list` to read the manifest, and `ovos.intent.describe` only
+  when it goes on to ask for the sentences behind a registration.
+
 ## 0.2.0 - 2026-09-05
 
 - Add the intent inventory (`thalovant_intents`): a satellite asks its hub

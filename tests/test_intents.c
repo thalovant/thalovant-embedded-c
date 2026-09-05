@@ -257,17 +257,7 @@ static void test_list_response_shapes(void)
     CHECK_STR_EQ(log.last.method, "regex");
     CHECK(log.last.enabled);
 
-    /* A reply that says ok:false carries no rows; an empty manifest is a
-     * successful, empty answer. */
-    const char *refused =
-        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
-        "{\"ok\":false,\"error\":\"manifest unavailable\"}," ECHOED_CONTEXT("req-3", "en-us")
-        "}}";
-    CHECK_INT_EQ(classify(refused, "req-3", &event), THALOVANT_OK);
-    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_LIST_RESPONSE);
-    CHECK(!event.ok);
-    CHECK_STR_EQ(event.error, "manifest unavailable");
-    CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), 0);
+    /* An empty manifest is a successful, empty answer: no rows, no error. */
     const char *empty =
         "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
         "{\"ok\":true,\"intents\":[]}," ECHOED_CONTEXT("req-3", "en-us") "}}";
@@ -275,6 +265,52 @@ static void test_list_response_shapes(void)
     CHECK(event.ok);
     CHECK_INT_EQ(event.count, 0);
     CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), 0);
+}
+
+static void test_a_refused_listing_is_not_an_empty_hub(void)
+{
+    /* ok:false on a listing means the query failed and told us nothing.
+     * Walking it as zero rows would show a person a hub that can do
+     * nothing, so the walk says so and the hub's words come with it. */
+    const char *refused =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
+        "{\"ok\":false,\"error\":\"manifest unavailable\"}," ECHOED_CONTEXT("req-3", "en-us")
+        "}}";
+    thalovant_intent_event event;
+    row_log log = { 0 };
+    CHECK_INT_EQ(classify(refused, "req-3", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_LIST_RESPONSE);
+    CHECK(!event.ok);
+    CHECK_STR_EQ(event.error, "manifest unavailable");
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), THALOVANT_ERR_HUB_REFUSED);
+    CHECK_INT_EQ(log.rows, 0);
+    CHECK_STR_EQ(thalovant_err_str(THALOVANT_ERR_HUB_REFUSED), "the hub refused the query");
+
+    /* A refusal that names no error still fails the listing. */
+    const char *silent =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
+        "{\"ok\":false}," ECHOED_CONTEXT("req-3", "en-us") "}}";
+    CHECK_INT_EQ(classify(silent, "req-3", &event), THALOVANT_OK);
+    CHECK_STR_EQ(event.error, "");
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), THALOVANT_ERR_HUB_REFUSED);
+
+    /* Rows sent alongside ok:false are not a half-answer to walk. */
+    const char *refused_with_rows =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
+        "{\"ok\":false,\"error\":\"partial\",\"intents\":[" WEATHER_ROW("en-us") "]},"
+        ECHOED_CONTEXT("req-3", "en-us") "}}";
+    CHECK_INT_EQ(classify(refused_with_rows, "req-3", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.count, 1);
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, log_row, &log), THALOVANT_ERR_HUB_REFUSED);
+    CHECK_INT_EQ(log.rows, 0);
+
+    /* The other half of the rule: a describe answering ok:false is a real
+     * answer -- the hub does not know that registration -- and leaves the
+     * intent without sentences rather than failing the inventory. */
+    definition_log definitions = { 0 };
+    CHECK_INT_EQ(classify(DESCRIBE_UNKNOWN, "req-d2", &event), THALOVANT_OK);
+    CHECK(!event.ok);
+    CHECK_INT_EQ(thalovant_intent_definitions(&event, log_definition, &definitions), 0);
 }
 
 /* The integrator's state for one query: the first reply wins. */
@@ -383,6 +419,90 @@ static void test_policy_denied(void)
     CHECK_INT_EQ(event.allowed_count, 0);
     CHECK_INT_EQ(classify(POLICY_DENIED, "req-9", &event), THALOVANT_OK);
     CHECK_INT_EQ(event.kind, THALOVANT_INTENT_IGNORE);
+}
+
+typedef struct {
+    int count;
+    char joined[256];
+} allowed_log;
+
+static bool log_allowed(const thalovant_intent_allowed_type *allowed, void *user)
+{
+    allowed_log *log = user;
+    CHECK_INT_EQ(allowed->index, log->count);
+    log->count++;
+    if (log->joined[0] != '\0') {
+        strcat(log->joined, " | ");
+    }
+    strcat(log->joined, allowed->type);
+    return true;
+}
+
+static void test_the_allowed_list_holds_only_message_types(void)
+{
+    /* A number or a null in `allowed` is not a message type. Handing one to
+     * an operator reading which types to allow would send them after "3". */
+    const char *denied =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":"
+        "{\"denied_type\":\"ovos.intent.list\",\"code\":\"acl_disallowed_type\",\"reason\":"
+        "\"ovos.intent.list not in allowed_types\",\"data\":{\"msg_type\":\"ovos.intent.list\","
+        "\"allowed\":[\"speak\",3,null,{\"type\":\"speak\"},[\"speak\"],true,"
+        "\"recognizer_loop:utterance\"]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
+    thalovant_intent_event event;
+    CHECK_INT_EQ(classify(denied, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_POLICY_DENIED);
+    /* The count is the number of message types, not of JSON elements. */
+    CHECK_INT_EQ(event.allowed_count, 2);
+    allowed_log log = { 0, "" };
+    CHECK_INT_EQ(thalovant_intent_allowed_types(&event, log_allowed, &log), 2);
+    CHECK_STR_EQ(log.joined, "speak | recognizer_loop:utterance");
+
+    /* A list naming no type at all is no allow-list; the denial still says
+     * what was refused, which is what the operator acts on. */
+    const char *nothing_usable =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":"
+        "{\"denied_type\":\"ovos.intent.list\",\"code\":\"acl_disallowed_type\","
+        "\"data\":{\"allowed\":[3,null]}}," ECHOED_CONTEXT("req-1", "en-us") "}}";
+    CHECK_INT_EQ(classify(nothing_usable, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_POLICY_DENIED);
+    CHECK_STR_EQ(event.denied_type, THALOVANT_EVENT_INTENT_LIST);
+    CHECK(event.allowed_json == NULL);
+    CHECK_INT_EQ(event.allowed_count, 0);
+    allowed_log none = { 0, "" };
+    CHECK_INT_EQ(thalovant_intent_allowed_types(&event, log_allowed, &none), 0);
+    CHECK_INT_EQ(none.count, 0);
+
+    /* A list too malformed to walk is dropped rather than handed on half
+     * read, and the denial survives it. */
+    const char *malformed =
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":"
+        "{\"denied_type\":\"ovos.intent.list\",\"data\":{\"allowed\":[\"speak\",]}},"
+        ECHOED_CONTEXT("req-1", "en-us") "}}";
+    CHECK_INT_EQ(classify(malformed, "req-1", &event), THALOVANT_OK);
+    CHECK_STR_EQ(event.denied_type, THALOVANT_EVENT_INTENT_LIST);
+    CHECK(event.allowed_json == NULL);
+    CHECK_INT_EQ(event.allowed_count, 0);
+
+    /* A type longer than THALOVANT_EVENT_NAME_MAX is not truncated. */
+    static char long_type[THALOVANT_EVENT_NAME_MAX + 8];
+    memset(long_type, 'x', sizeof(long_type) - 1);
+    long_type[sizeof(long_type) - 1] = '\0';
+    static char frame[512];
+    sprintf(frame, "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\","
+                   "\"data\":{\"denied_type\":\"ovos.intent.list\",\"data\":{\"allowed\":"
+                   "[\"%s\"]}}}}", long_type);
+    CHECK_INT_EQ(classify(frame, NULL, &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.allowed_count, 1);
+    allowed_log overflow = { 0, "" };
+    CHECK_INT_EQ(thalovant_intent_allowed_types(&event, log_allowed, &overflow),
+                 THALOVANT_ERR_NOMEM);
+
+    /* The walker takes denials only. */
+    CHECK_INT_EQ(classify(LIST_RESPONSE_EN, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_intent_allowed_types(&event, log_allowed, &log), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(thalovant_intent_allowed_types(NULL, log_allowed, &log), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(classify(POLICY_DENIED, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_intent_allowed_types(&event, NULL, &log), THALOVANT_ERR_INVALID);
 }
 
 static void test_include_definitions_fast_path(void)
@@ -666,9 +786,11 @@ void tlv_test_intents(void)
     test_build_describe_query();
     test_list_response_rows();
     test_list_response_shapes();
+    test_a_refused_listing_is_not_an_empty_hub();
     test_duplicate_delivery_takes_the_first();
     test_language_tags_fold();
     test_policy_denied();
+    test_the_allowed_list_holds_only_message_types();
     test_include_definitions_fast_path();
     test_describe_response();
     test_describe_shapes();

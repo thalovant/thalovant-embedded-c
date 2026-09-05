@@ -15,6 +15,7 @@ const char *thalovant_err_str(int err)
     case THALOVANT_ERR_AUTH: return "authentication tag mismatch";
     case THALOVANT_ERR_UNSUPPORTED: return "unsupported input";
     case THALOVANT_ERR_POLICY_DENIED: return "message type refused by the hub's policy";
+    case THALOVANT_ERR_HUB_REFUSED: return "the hub refused the query";
     default: return "unknown error";
     }
 }

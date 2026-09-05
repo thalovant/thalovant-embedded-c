@@ -34,9 +34,11 @@ protocol-specific:
   `ovos.intent.describe` (the sentences behind one intent, `{slot}`
   placeholders included), a classifier for their replies and for
   `hive.policy.denied`, and streaming walkers that deliver each row,
-  definition and sample sentence through a callback — a manifest of any
-  size in bounded memory, over the satellite's own session with no
-  control-plane credential.
+  definition, sample sentence and allowed message type through a callback —
+  a manifest of any size in bounded memory, over the satellite's own session
+  with no control-plane credential. The connection's allow-list needs
+  `ovos.intent.list` to read the manifest, and `ovos.intent.describe` only
+  when you go on to ask for the sentences behind a registration.
 - A small in-repo JSON tokenizer (`thalovant_json`) with shallow scans for
   payloads larger than a token pool, and hex/Base64 codecs — **zero
   external dependencies, zero third-party code**.
@@ -123,9 +125,14 @@ switch (reply.kind) {
 case THALOVANT_INTENT_LIST_RESPONSE:
     if (query.answered) break;        /* the hub delivers every reply twice */
     query.answered = true;
-    thalovant_intent_list_rows(&reply, on_row, NULL);   /* count, or < 0 */
+    /* the row count, or < 0: THALOVANT_ERR_HUB_REFUSED when the listing
+     * said ok:false (reply.error carries the hub's words) -- a refused
+     * listing is not an empty hub, so say so rather than showing a device
+     * that can do nothing */
+    if (thalovant_intent_list_rows(&reply, on_row, NULL) < 0) { /* ... */ }
     break;
 case THALOVANT_INTENT_POLICY_DENIED:  /* reply.denied_type names the query */
+    /* thalovant_intent_allowed_types() walks the types it may publish */
     break;
 default: break;                       /* THALOVANT_INTENT_IGNORE */
 }
@@ -141,21 +148,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.2.0`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.3.0`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.2.0
+git -C third_party/thalovant-embedded-c checkout v0.3.0
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.2.0)
+  GIT_TAG        v0.3.0)
 ```
 
 Every GitHub release also carries a reproducible source archive

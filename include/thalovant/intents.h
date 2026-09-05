@@ -39,6 +39,18 @@
  * data: {msg_type, allowed}} and no reply. THALOVANT_INTENT_POLICY_DENIED
  * surfaces it at once, naming the type, so the caller need not wait out a
  * timeout; the row walkers return THALOVANT_ERR_POLICY_DENIED for it.
+ * A connection needs ovos.intent.list in its allow-list to read the
+ * manifest at all; ovos.intent.describe only when it goes on to ask for
+ * the sentences behind a registration.
+ *
+ * A negative answer is not the same on both queries. A listing answering
+ * {"ok": false, "error": ...} has told us nothing, so
+ * thalovant_intent_list_rows returns THALOVANT_ERR_HUB_REFUSED rather than
+ * the zero rows that would show a person a hub able to do nothing; the
+ * hub's own words are in the event's `error`. A describe answering
+ * ok: false is a real answer -- the hub does not know that registration --
+ * and thalovant_intent_definitions delivers nothing for it, exactly as an
+ * intent with no sentences.
  *
  * Language tags compare case-insensitively with "_" and "-" folded
  * (thalovant_intent_same_language): the runtime answers "fr-fr" as "fr-FR".
@@ -157,7 +169,11 @@ typedef struct {
 
     /* POLICY_DENIED: the type this connection may not publish, the code
      * (THALOVANT_POLICY_CODE_ACL_DISALLOWED_TYPE), the reason, and the raw
-     * JSON slice of data.data.allowed -- the types it may -- with its count. */
+     * JSON slice of data.data.allowed -- the types it may -- with the number
+     * of *string* entries in it, which is what thalovant_intent_allowed_types
+     * delivers. A list holding nothing usable, or one too malformed to walk,
+     * leaves allowed_json NULL and allowed_count 0; the denial itself still
+     * names denied_type, code and reason. */
     char denied_type[THALOVANT_EVENT_NAME_MAX];
     char code[THALOVANT_POLICY_CODE_MAX];
     char reason[THALOVANT_POLICY_REASON_MAX];
@@ -222,12 +238,23 @@ typedef bool (*thalovant_intent_definition_fn)(const thalovant_intent_definition
                                                void *user);
 typedef bool (*thalovant_intent_sample_fn)(const thalovant_intent_sample *sample, void *user);
 
+/* One message type from a denial's allow-list. */
+typedef struct {
+    int index; /* position among the string entries, from 0 */
+    char type[THALOVANT_EVENT_NAME_MAX];
+} thalovant_intent_allowed_type;
+
+typedef bool (*thalovant_intent_allowed_fn)(const thalovant_intent_allowed_type *allowed,
+                                            void *user);
+
 /*
  * Deliver each row of a THALOVANT_INTENT_LIST_RESPONSE event. Rows without
  * a skill_id or intent_name are skipped, like the reference SDK. Returns the
- * number delivered (0 for a reply that says ok:false), THALOVANT_ERR_POLICY_DENIED
- * for a POLICY_DENIED event, THALOVANT_ERR_INVALID for any other kind, and
- * THALOVANT_ERR_NOMEM when a field exceeds its limit.
+ * number delivered, THALOVANT_ERR_HUB_REFUSED for a reply that says
+ * ok:false (a refused listing is not an empty hub; the event's `error`
+ * carries the hub's text), THALOVANT_ERR_POLICY_DENIED for a POLICY_DENIED
+ * event, THALOVANT_ERR_INVALID for any other kind, and THALOVANT_ERR_NOMEM
+ * when a field exceeds its limit.
  */
 int thalovant_intent_list_rows(const thalovant_intent_event *event,
                                thalovant_intent_registration_fn fn, void *user);
@@ -235,7 +262,10 @@ int thalovant_intent_list_rows(const thalovant_intent_event *event,
 /*
  * Deliver each definition of a THALOVANT_INTENT_DESCRIBE_RESPONSE event,
  * keyword ones first as the hub orders them. Items whose definition names
- * no skill_id/intent_name are skipped. Same return convention as
+ * no skill_id/intent_name are skipped. Returns the number delivered -- 0
+ * for a reply that says ok:false, which is the hub answering that it does
+ * not know the registration, and so leaves the intent without sentences
+ * rather than failing the inventory -- and otherwise the same errors as
  * thalovant_intent_list_rows.
  */
 int thalovant_intent_definitions(const thalovant_intent_event *event,
@@ -248,6 +278,18 @@ int thalovant_intent_definitions(const thalovant_intent_event *event,
  */
 int thalovant_intent_samples(const char *definition_json, size_t len,
                              thalovant_intent_sample_fn fn, void *user);
+
+/*
+ * Deliver each message type a THALOVANT_INTENT_POLICY_DENIED event says the
+ * connection may publish. Only the list's string entries are delivered: a
+ * number or a null there is not a message type, and naming one would send
+ * an operator reading which types to allow after "3" or "null". Returns the
+ * number delivered (0 when the denial named none), THALOVANT_ERR_INVALID
+ * for any other kind of event, THALOVANT_ERR_NOMEM for a type longer than
+ * THALOVANT_EVENT_NAME_MAX, and THALOVANT_ERR_JSON for a malformed list.
+ */
+int thalovant_intent_allowed_types(const thalovant_intent_event *event,
+                                   thalovant_intent_allowed_fn fn, void *user);
 
 /* "fr-fr", "fr_FR" and " FR-fr " name the same language. NULL reads as "". */
 bool thalovant_intent_same_language(const char *a, const char *b);
