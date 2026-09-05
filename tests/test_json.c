@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "harness.h"
 #include "thalovant/json.h"
 
@@ -115,6 +117,141 @@ static void test_skip_and_span(void)
     CHECK(js[start] == '{' && js[end - 1] == '}');
 }
 
+
+static void test_scan_values(void)
+{
+    /* Strings and containers holding commas and brackets: the shallow scan
+     * jumps over strings whole and counts only depth-1 commas. */
+    const char *js = "  {\"a\":\"x,]\",\"b\":[1,{\"c\":[2,3]},\"}\"],\"d\":{},\"e\":true} 7";
+    thalovant_json_tok tok;
+    int next = thalovant_json_scan(js, strlen(js), 0, &tok);
+    CHECK(next > 0);
+    CHECK_INT_EQ(tok.type, THALOVANT_JSON_OBJECT);
+    CHECK_INT_EQ(tok.start, 2);
+    CHECK_INT_EQ(tok.size, 4);
+    CHECK_INT_EQ(tok.parent, -1);
+    CHECK_INT_EQ(js[next - 1], '}');
+
+    thalovant_json_tok value;
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "a", &value), THALOVANT_OK);
+    CHECK_INT_EQ(value.type, THALOVANT_JSON_STRING);
+    char buf[16];
+    CHECK_INT_EQ(thalovant_json_unescape(js, &value, buf, sizeof(buf)), 3);
+    CHECK_STR_EQ(buf, "x,]");
+
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "b", &value), THALOVANT_OK);
+    CHECK_INT_EQ(value.type, THALOVANT_JSON_ARRAY);
+    CHECK_INT_EQ(value.size, 3);
+    size_t cursor = 0;
+    thalovant_json_tok elem;
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &value, &cursor, &elem), 1);
+    CHECK_INT_EQ(elem.type, THALOVANT_JSON_PRIMITIVE);
+    long n = 0;
+    CHECK_INT_EQ(thalovant_json_as_int(js, &elem, &n), THALOVANT_OK);
+    CHECK_INT_EQ(n, 1);
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &value, &cursor, &elem), 1);
+    CHECK_INT_EQ(elem.type, THALOVANT_JSON_OBJECT);
+    CHECK_INT_EQ(elem.size, 1);
+    thalovant_json_tok inner;
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &elem, "c", &inner), THALOVANT_OK);
+    CHECK_INT_EQ(inner.type, THALOVANT_JSON_ARRAY);
+    CHECK_INT_EQ(inner.size, 2);
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &value, &cursor, &elem), 1);
+    CHECK_INT_EQ(elem.type, THALOVANT_JSON_STRING);
+    CHECK(thalovant_json_str_eq(js, &elem, "}"));
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &value, &cursor, &elem), 0);
+    /* Calling again at the end stays at the end. */
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &value, &cursor, &elem), 0);
+
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "d", &value), THALOVANT_OK);
+    CHECK_INT_EQ(value.type, THALOVANT_JSON_OBJECT);
+    CHECK_INT_EQ(value.size, 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "e", &value), THALOVANT_OK);
+    CHECK(thalovant_json_as_bool(js, &value, false));
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "zz", &value), THALOVANT_ERR_MISSING);
+
+    /* A trailing primitive after the object is the caller's business. */
+    CHECK(thalovant_json_scan(js, strlen(js), (size_t)next, &tok) > 0);
+    CHECK_INT_EQ(tok.type, THALOVANT_JSON_PRIMITIVE);
+    CHECK(thalovant_json_str_eq(js, &tok, "7") == false);
+    CHECK_INT_EQ(thalovant_json_as_int(js, &tok, &n), THALOVANT_OK);
+    CHECK_INT_EQ(n, 7);
+
+    /* An empty array iterates to nothing; a null value is not "missing". */
+    const char *empty = "{\"list\":[],\"nul\":null}";
+    CHECK(thalovant_json_scan(empty, strlen(empty), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(empty, &tok, "list", &value), THALOVANT_OK);
+    CHECK_INT_EQ(value.size, 0);
+    cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(empty, &value, &cursor, &elem), 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(empty, &tok, "nul", &value), THALOVANT_OK);
+    CHECK_INT_EQ(value.type, THALOVANT_JSON_PRIMITIVE);
+    CHECK_INT_EQ(thalovant_json_as_string(empty, &value, buf, sizeof(buf)), 0);
+}
+
+static void test_scan_matches_tokenizer_on_big_arrays(void)
+{
+    /* 200 elements: far beyond any token pool, but the shallow scan holds
+     * one token at a time. The span and child count agree with the
+     * tokenizer's answer for a small prefix. */
+    static char big[8192];
+    size_t pos = 0;
+    big[pos++] = '[';
+    for (int i = 0; i < 200; i++) {
+        pos += (size_t)sprintf(big + pos, "%s{\"i\":%d,\"s\":\"v,%d\"}", i ? "," : "", i, i);
+    }
+    big[pos++] = ']';
+    big[pos] = '\0';
+    thalovant_json_tok tok;
+    CHECK_INT_EQ(thalovant_json_scan(big, pos, 0, &tok), (int)pos);
+    CHECK_INT_EQ(tok.type, THALOVANT_JSON_ARRAY);
+    CHECK_INT_EQ(tok.size, 200);
+    size_t cursor = 0;
+    thalovant_json_tok elem;
+    int seen = 0;
+    while (thalovant_json_scan_next(big, &tok, &cursor, &elem) == 1) {
+        thalovant_json_tok value;
+        CHECK_INT_EQ(thalovant_json_scan_key(big, &elem, "i", &value), THALOVANT_OK);
+        long n = -1;
+        CHECK_INT_EQ(thalovant_json_as_int(big, &value, &n), THALOVANT_OK);
+        CHECK_INT_EQ(n, seen);
+        seen++;
+    }
+    CHECK_INT_EQ(seen, 200);
+    thalovant_json_tok toks[8];
+    CHECK_INT_EQ(thalovant_json_parse(big, pos, toks, 8), THALOVANT_ERR_NOMEM);
+}
+
+static void test_scan_syntax_errors(void)
+{
+    thalovant_json_tok tok;
+    CHECK_INT_EQ(thalovant_json_scan("{\"a\":1", 6, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("[1,2", 4, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("{\"a\":1]", 7, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("\"open", 5, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("\"bad\\q\"", 7, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("\"\\u12\"", 6, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("tru", 3, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan("   ", 3, 0, &tok), THALOVANT_ERR_JSON);
+    CHECK_INT_EQ(thalovant_json_scan(NULL, 0, 0, &tok), THALOVANT_ERR_INVALID);
+
+    /* A key lookup or iteration on the wrong token type is refused, and a
+     * truncated member fails rather than reading past the object. */
+    const char *js = "{\"a\":[1,2]}";
+    CHECK(thalovant_json_scan(js, strlen(js), 0, &tok) > 0);
+    thalovant_json_tok value;
+    size_t cursor = 0;
+    CHECK_INT_EQ(thalovant_json_scan_next(js, &tok, &cursor, &value), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &tok, "a", &value), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_json_scan_key(js, &value, "a", &tok), THALOVANT_ERR_INVALID);
+    const char *broken = "{\"a\" 1}";
+    CHECK(thalovant_json_scan(broken, strlen(broken), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(broken, &tok, "a", &value), THALOVANT_ERR_JSON);
+    const char *bare = "{1:2}";
+    CHECK(thalovant_json_scan(bare, strlen(bare), 0, &tok) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(bare, &tok, "a", &value), THALOVANT_ERR_JSON);
+}
+
 void tlv_test_json(void)
 {
     test_basic_parse();
@@ -123,4 +260,7 @@ void tlv_test_json(void)
     test_aliases_skip_null();
     test_coercion();
     test_skip_and_span();
+    test_scan_values();
+    test_scan_matches_tokenizer_on_big_arrays();
+    test_scan_syntax_errors();
 }
