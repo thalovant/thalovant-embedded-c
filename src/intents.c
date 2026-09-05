@@ -239,6 +239,65 @@ static thalovant_intent_engine engine_of(const char *method)
     return THALOVANT_INTENT_ENGINE_UNKNOWN;
 }
 
+/* --------------------------------------------------------- allow-list */
+
+/*
+ * Walk a denial's `allowed` array, delivering its non-empty string entries,
+ * whitespace-trimmed. A number or a null in the list is not a message type,
+ * and neither is "" or "  ": naming one would send an operator reading
+ * which types to allow after "3", "null", or nothing at all, so they are
+ * passed over. `fn` NULL counts them without delivering. Returns the number
+ * of message types, or a negative error.
+ */
+static int walk_allowed(const char *js, size_t len, int count, thalovant_intent_allowed_fn fn,
+                        void *user)
+{
+    thalovant_json_tok array = { THALOVANT_JSON_ARRAY, 0, (int)len, count, -1 };
+    size_t cursor = 0;
+    thalovant_json_tok item;
+    int delivered = 0;
+    int rc;
+    while ((rc = thalovant_json_scan_next(js, &array, &cursor, &item)) == 1) {
+        if (item.type != THALOVANT_JSON_STRING) {
+            continue;
+        }
+        /* thalovant_json_as_string unescapes and trims, so a blank entry
+         * comes back empty however it was written. */
+        thalovant_intent_allowed_type allowed;
+        int n = thalovant_json_as_string(js, &item, allowed.type, sizeof(allowed.type));
+        if (n == THALOVANT_ERR_NOMEM && fn == NULL) {
+            /* Too long to copy is still a type. Count it, and leave the
+             * refusal to truncate to the walk that delivers. */
+            delivered++;
+            continue;
+        }
+        if (n < 0) {
+            return n;
+        }
+        if (n == 0) {
+            continue;
+        }
+        allowed.index = delivered;
+        delivered++;
+        if (fn != NULL && !fn(&allowed, user)) {
+            return delivered;
+        }
+    }
+    return rc < 0 ? rc : delivered;
+}
+
+int thalovant_intent_allowed_types(const thalovant_intent_event *event,
+                                   thalovant_intent_allowed_fn fn, void *user)
+{
+    if (event == NULL || fn == NULL || event->kind != THALOVANT_INTENT_POLICY_DENIED) {
+        return THALOVANT_ERR_INVALID;
+    }
+    if (event->allowed_json == NULL || event->allowed_len == 0) {
+        return 0;
+    }
+    return walk_allowed(event->allowed_json, event->allowed_len, event->allowed_count, fn, user);
+}
+
 /* ------------------------------------------------------------ classify */
 
 int thalovant_intent_classify(const char *frame_json, size_t len, const char *request_id,
@@ -364,9 +423,18 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
             thalovant_json_tok allowed;
             if (read_container(frame_json, &data, "data", THALOVANT_JSON_OBJECT, &inner) &&
                 read_container(frame_json, &inner, "allowed", THALOVANT_JSON_ARRAY, &allowed)) {
-                out->allowed_json = frame_json + allowed.start;
-                out->allowed_len = (size_t)(allowed.end - allowed.start);
-                out->allowed_count = allowed.size;
+                /* Count the message types, which are the string entries: a
+                 * list of nothing but numbers and nulls names no type, and
+                 * one too malformed to walk cannot be read out either. The
+                 * denial still stands on denied_type/code/reason. */
+                const char *json = frame_json + allowed.start;
+                size_t json_len = (size_t)(allowed.end - allowed.start);
+                int types = walk_allowed(json, json_len, allowed.size, NULL, NULL);
+                if (types > 0) {
+                    out->allowed_json = json;
+                    out->allowed_len = json_len;
+                    out->allowed_count = types;
+                }
             }
         }
     } else if (has_data) {
@@ -391,9 +459,16 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
 
 /* ------------------------------------------------------------- walkers */
 
-/* Common entry check for the two reply walkers. */
+/*
+ * Common entry check for the two reply walkers. `refusal_is_error` says
+ * what an `ok: false` reply means for this query: a listing that failed has
+ * told us nothing, and answering it with zero rows would show a person a
+ * hub able to do nothing, so it is an error; a describe that failed has
+ * answered -- the hub does not know that registration -- and simply has no
+ * definitions.
+ */
 static int walkable(const thalovant_intent_event *event, thalovant_intent_kind kind, bool has_fn,
-                    thalovant_json_tok *items)
+                    bool refusal_is_error, thalovant_json_tok *items)
 {
     if (event == NULL || !has_fn) {
         return THALOVANT_ERR_INVALID;
@@ -404,7 +479,10 @@ static int walkable(const thalovant_intent_event *event, thalovant_intent_kind k
     if (event->kind != kind) {
         return THALOVANT_ERR_INVALID;
     }
-    if (!event->ok || event->items_json == NULL || event->items_len == 0) {
+    if (!event->ok) {
+        return refusal_is_error ? THALOVANT_ERR_HUB_REFUSED : 0;
+    }
+    if (event->items_json == NULL || event->items_len == 0) {
         return 0;
     }
     items->type = THALOVANT_JSON_ARRAY;
@@ -468,7 +546,7 @@ int thalovant_intent_list_rows(const thalovant_intent_event *event,
                                thalovant_intent_registration_fn fn, void *user)
 {
     thalovant_json_tok items;
-    int rc = walkable(event, THALOVANT_INTENT_LIST_RESPONSE, fn != NULL, &items);
+    int rc = walkable(event, THALOVANT_INTENT_LIST_RESPONSE, fn != NULL, true, &items);
     if (rc <= 0) {
         return rc;
     }
@@ -543,7 +621,7 @@ int thalovant_intent_definitions(const thalovant_intent_event *event,
                                  thalovant_intent_definition_fn fn, void *user)
 {
     thalovant_json_tok items;
-    int rc = walkable(event, THALOVANT_INTENT_DESCRIBE_RESPONSE, fn != NULL, &items);
+    int rc = walkable(event, THALOVANT_INTENT_DESCRIBE_RESPONSE, fn != NULL, false, &items);
     if (rc <= 0) {
         return rc;
     }

@@ -238,6 +238,12 @@ delivered, so a manifest of hundreds of intents costs one
 `thalovant_intent_registration` of stack.
 
 ```c
+static bool on_allowed_type(const thalovant_intent_allowed_type *allowed, void *user)
+{
+    /* allowed->type: one message type this connection may publish */
+    return true;
+}
+
 static bool on_sample(const thalovant_intent_sample *sample, void *user)
 {
     /* sample->text; sample->has_slot says it carries a {slot} placeholder,
@@ -269,15 +275,22 @@ switch (reply.kind) {
 case THALOVANT_INTENT_LIST_RESPONSE:
     if (s_inventory.answered) break;    /* a repeat of the reply we took */
     s_inventory.answered = true;
-    if (!reply.ok) { /* reply.error */ break; }
-    /* Returns the row count, or a negative error: a walk that meets
-     * malformed JSON stops there and says so. */
-    thalovant_intent_list_rows(&reply, on_row, NULL);
+    /* Returns the row count, or a negative error: THALOVANT_ERR_HUB_REFUSED
+     * when the listing itself said ok:false (reply.error carries the hub's
+     * words) -- a refused listing is not an empty hub, and showing it as no
+     * intents would tell a person the device can do nothing -- and a walk
+     * that meets malformed JSON stops there and says so. */
+    if (thalovant_intent_list_rows(&reply, on_row, NULL) < 0) {
+        /* say the listing failed; do not draw an empty inventory */
+    }
     break;
 case THALOVANT_INTENT_POLICY_DENIED:
     /* This connection may not publish reply.denied_type: give up now
-     * rather than waiting out the timeout. reply.allowed_json lists what
-     * it may publish; the dashboard's connection settings fix it. */
+     * rather than waiting out the timeout. thalovant_intent_allowed_types()
+     * walks the types it may publish (non-empty string entries only,
+     * trimmed: a number, a null, or a blank there is not a message type);
+     * the dashboard's connection settings fix it. */
+    thalovant_intent_allowed_types(&reply, on_allowed_type, NULL);
     break;
 default:
     break;                              /* THALOVANT_INTENT_IGNORE */
@@ -326,3 +339,15 @@ The walkers return `THALOVANT_ERR_POLICY_DENIED` when handed a denial, and
 `THALOVANT_ERR_NOMEM` when a field exceeds its `THALOVANT_INTENT_*_MAX`
 (see `include/thalovant/config.h`; nothing is truncated). Use the same 5 s
 per-query deadline the desktop SDKs use.
+
+A negative answer means different things on the two queries. A listing that
+says `ok: false` failed and told you nothing, so `thalovant_intent_list_rows`
+returns `THALOVANT_ERR_HUB_REFUSED`; a describe that says `ok: false` is the
+hub answering that it does not know that registration, so
+`thalovant_intent_definitions` delivers nothing and the intent keeps its row
+without sentences.
+
+The connection's allow-list, in the dashboard's connection settings, needs
+`ovos.intent.list` to read the manifest at all. `ovos.intent.describe` is
+needed only if you go on to ask for the sentences behind a registration —
+a satellite that only lists what can be said never sends it.

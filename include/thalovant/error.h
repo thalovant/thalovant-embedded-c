@@ -21,6 +21,14 @@ typedef enum {
      * the message type it sent (see thalovant_intent_event.denied_type).
      */
     THALOVANT_ERR_POLICY_DENIED = -7,
+    /*
+     * The hub answered a query with {"ok": false, "error": ...}: the query
+     * failed and told us nothing (thalovant_intent_event.error carries the
+     * hub's own words). Unlike THALOVANT_ERR_POLICY_DENIED, which is the
+     * connection's allow-list refusing to publish the type at all, this is
+     * the runtime declining to answer a query it did receive.
+     */
+    THALOVANT_ERR_HUB_REFUSED = -8,
 } thalovant_err;
 
 /* Human-readable name for an error code (never NULL). */
