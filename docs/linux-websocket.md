@@ -109,6 +109,9 @@ static void send_frame(char *frame_json, size_t frame_len)
     int envelope_len = thalovant_envelope_encrypt_json(
         key, nonce, (uint8_t *)frame_json, frame_len,
         envelope, sizeof(envelope));
+    if (envelope_len < 0) {
+        return;                 /* THALOVANT_ERR_NOMEM: envelope[] too small */
+    }
     ws_send_text(envelope, (size_t)envelope_len);
 }
 
@@ -117,6 +120,9 @@ char frame[1024];
 thalovant_ask_request ask = { "turn on the lights", "en-us",
                               session_id, identity.site_id, request_id };
 int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
+if (frame_len < 0) {
+    return;                     /* THALOVANT_ERR_NOMEM: nothing to send */
+}
 send_frame(frame, (size_t)frame_len);
 ```
 

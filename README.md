@@ -76,13 +76,14 @@ thalovant_crypto_runtime_key(identity.crypto_key, key);
 char frame[1024];
 thalovant_ask_request ask = { "what time is it", "en-us",
                               "sess-1", identity.site_id, "req-1" };
-thalovant_ask_build_frame(&ask, frame, sizeof(frame));
+int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
+if (frame_len < 0) { /* THALOVANT_ERR_NOMEM: frame[] too small; send nothing */ }
 
 uint8_t nonce[16];   /* fill from your RNG — never reuse */
 uint8_t sealed[1100];
 size_t sealed_len;
 thalovant_envelope_encrypt_binary(key, nonce, (uint8_t *)frame,
-                                  strlen(frame), sealed, sizeof(sealed),
+                                  (size_t)frame_len, sealed, sizeof(sealed),
                                   &sealed_len);
 /* publish sealed on topics.inbound ... */
 
@@ -95,10 +96,18 @@ if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
 ## What can be said (intent inventory)
 
 ```c
+/* one query in flight: its id, and whether its reply has been taken.
+ * Keep one of these per query -- a shared flag would let one query's
+ * reply suppress another's. */
+struct inventory_query { const char *request_id; bool answered; };
+
 /* ask the hub's intent manifest for one language */
+struct inventory_query query = { "req-2", false };   /* both set together */
 thalovant_intent_list_request list = { "en-us", "sess-1", identity.site_id,
-                                       "req-2", false };
-thalovant_intent_list_build_frame(&list, frame, sizeof(frame));
+                                       query.request_id, false };
+if (thalovant_intent_list_build_frame(&list, frame, sizeof(frame)) < 0) {
+    /* THALOVANT_ERR_NOMEM: frame[] too small; nothing was built to send */
+}
 /* seal and publish as above */
 
 /* each reply frame: rows stream through a callback, one at a time */
@@ -108,15 +117,13 @@ static bool on_row(const thalovant_intent_registration *row, void *user)
     return true;                      /* false stops the walk */
 }
 
-static bool answered;                 /* reset when the query is sent */
-
 thalovant_intent_event reply;
-thalovant_intent_classify(plaintext, plaintext_len, "req-2", &reply);
+thalovant_intent_classify(plaintext, plaintext_len, query.request_id, &reply);
 switch (reply.kind) {
 case THALOVANT_INTENT_LIST_RESPONSE:
-    if (answered) break;              /* the hub delivers every reply twice */
-    answered = true;
-    thalovant_intent_list_rows(&reply, on_row, NULL);
+    if (query.answered) break;        /* the hub delivers every reply twice */
+    query.answered = true;
+    thalovant_intent_list_rows(&reply, on_row, NULL);   /* count, or < 0 */
     break;
 case THALOVANT_INTENT_POLICY_DENIED:  /* reply.denied_type names the query */
     break;

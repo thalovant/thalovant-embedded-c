@@ -77,21 +77,30 @@ On `MQTT_EVENT_CONNECTED`:
 The MQTT transport uses the HiveMind **binary** framing: a binary frame
 (`thalovant_wire_encode_binary`) sealed as `nonce || ciphertext || tag`
 (`thalovant_envelope_encrypt_binary`). Nonces come from the hardware RNG.
+Every builder and codec here reports what it wrote, or a negative
+`thalovant_err`; check it before you send, or a buffer too small publishes
+whatever the buffer happened to hold.
 
 ```c
 static void publish_message(const thalovant_hive_message *msg)
 {
     uint8_t frame[1024];
     size_t frame_len;
-    thalovant_wire_encode_binary(msg, frame, sizeof(frame), &frame_len);
+    if (thalovant_wire_encode_binary(msg, frame, sizeof(frame), &frame_len)
+            != THALOVANT_OK) {
+        return;                 /* THALOVANT_ERR_NOMEM: frame[] too small */
+    }
 
     uint8_t nonce[THALOVANT_GCM_NONCE_LEN];
     esp_fill_random(nonce, sizeof(nonce));
 
     uint8_t sealed[sizeof(frame) + 32];
     size_t sealed_len;
-    thalovant_envelope_encrypt_binary(s_key, nonce, frame, frame_len,
-                                      sealed, sizeof(sealed), &sealed_len);
+    if (thalovant_envelope_encrypt_binary(s_key, nonce, frame, frame_len,
+                                          sealed, sizeof(sealed), &sealed_len)
+            != THALOVANT_OK) {
+        return;
+    }
     esp_mqtt_client_publish(client, s_topics.inbound, (const char *)sealed,
                             (int)sealed_len, s_identity.mqtt.qos, 0);
 }
@@ -148,7 +157,10 @@ thalovant_ask_request ask = {
     .site_id = s_identity.site_id,
     .request_id = request_id,   /* unique per ask */
 };
-thalovant_ask_build_frame(&ask, frame_json, sizeof(frame_json));
+int frame_len = thalovant_ask_build_frame(&ask, frame_json, sizeof(frame_json));
+if (frame_len < 0) {
+    return;                     /* THALOVANT_ERR_NOMEM: nothing to send */
+}
 /* wrap frame_json with encode_binary + encrypt_binary and publish. */
 ```
 
@@ -208,7 +220,13 @@ static void ask_what_can_be_said(void)
         .request_id = s_inventory.request_id,
         .include_definitions = true,     /* a runtime may attach the sentences */
     };
-    thalovant_intent_list_build_frame(&list, frame_json, sizeof(frame_json));
+    if (thalovant_intent_list_build_frame(&list, frame_json,
+                                          sizeof(frame_json)) < 0) {
+        /* THALOVANT_ERR_NOMEM: frame_json[] is too small for this query.
+         * Nothing was sent, so leave no request outstanding. */
+        s_inventory.request_id[0] = '\0';
+        return;
+    }
     /* wrap with encode_binary + encrypt_binary and publish, as for ask */
 }
 ```
@@ -282,7 +300,10 @@ thalovant_intent_describe_request describe = {
     .site_id = s_identity.site_id,
     .request_id = "req-desc-1",
 };
-thalovant_intent_describe_build_frame(&describe, frame_json, sizeof(frame_json));
+if (thalovant_intent_describe_build_frame(&describe, frame_json,
+                                          sizeof(frame_json)) < 0) {
+    return;                     /* THALOVANT_ERR_NOMEM: nothing to send */
+}
 
 /* the reply */
 static bool on_definition(const thalovant_intent_definition *definition, void *user)
