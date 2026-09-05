@@ -8,6 +8,7 @@
 #include "thalovant/config.h"
 #include "thalovant/error.h"
 #include "thalovant/identity.h"
+#include "thalovant/intents.h"
 #include "thalovant/json.h"
 #include "thalovant/sha256.h"
 #include "thalovant/topics.h"

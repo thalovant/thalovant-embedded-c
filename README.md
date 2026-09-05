@@ -29,8 +29,17 @@ protocol-specific:
   request/session correlation, and a classifier for the reply frames
   (speak / handled / complete_intent_failure / policy denied / query
   timeout) so you can run the ask loop on your own event loop.
-- A small in-repo JSON tokenizer (`thalovant_json`) and hex/Base64 codecs —
-  **zero external dependencies, zero third-party code**.
+- **`thalovant_intents`** — the intent inventory: builders for
+  `ovos.intent.list` (what the hub can be asked, per language) and
+  `ovos.intent.describe` (the sentences behind one intent, `{slot}`
+  placeholders included), a classifier for their replies and for
+  `hive.policy.denied`, and streaming walkers that deliver each row,
+  definition and sample sentence through a callback — a manifest of any
+  size in bounded memory, over the satellite's own session with no
+  control-plane credential.
+- A small in-repo JSON tokenizer (`thalovant_json`) with shallow scans for
+  payloads larger than a token pool, and hex/Base64 codecs — **zero
+  external dependencies, zero third-party code**.
 
 The core paths never allocate: every function writes into caller-provided
 buffers, with all size limits tunable through `include/thalovant/config.h`
@@ -83,27 +92,59 @@ thalovant_ask_classify(plaintext, plaintext_len, "req-1", &event);
 if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
 ```
 
+## What can be said (intent inventory)
+
+```c
+/* ask the hub's intent manifest for one language */
+thalovant_intent_list_request list = { "en-us", "sess-1", identity.site_id,
+                                       "req-2", false };
+thalovant_intent_list_build_frame(&list, frame, sizeof(frame));
+/* seal and publish as above */
+
+/* each reply frame: rows stream through a callback, one at a time */
+static bool on_row(const thalovant_intent_registration *row, void *user)
+{
+    printf("%s:%s (%s)\n", row->skill_id, row->intent_name, row->lang);
+    return true;                      /* false stops the walk */
+}
+
+thalovant_intent_event reply;
+thalovant_intent_classify(plaintext, plaintext_len, "req-2", &reply);
+switch (reply.kind) {
+case THALOVANT_INTENT_LIST_RESPONSE:  /* take the first reply, ignore repeats */
+    thalovant_intent_list_rows(&reply, on_row, NULL);
+    break;
+case THALOVANT_INTENT_POLICY_DENIED:  /* reply.denied_type names the query */
+    break;
+default: break;                       /* THALOVANT_INTENT_IGNORE */
+}
+
+/* the sentences behind one intent: ovos.intent.describe, then
+ * thalovant_intent_definitions() and thalovant_intent_samples() on the
+ * reply -- see docs/esp32-mqtt.md section 6 */
+```
+
 Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 [docs/linux-websocket.md](docs/linux-websocket.md).
 
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.1.3`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.2.0`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.1.3
+git -C third_party/thalovant-embedded-c checkout v0.2.0
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.1.3)
+  GIT_TAG        v0.2.0)
 ```
 
 Every GitHub release also carries a reproducible source archive
