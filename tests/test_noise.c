@@ -133,6 +133,35 @@ static void transcripts(void)
             CHECK(s.failed);
         }
 }
+static void invalid_handshake_steps(void)
+{
+    /* Public caller-owned state must fail closed before indexing either table,
+     * including a completed KK session whose ready flag was cleared by a caller. */
+    const int patterns[] = {THALOVANT_NOISE_XX, THALOVANT_NOISE_KK, 99};
+    uint8_t message[128] = {0}, out[128], expected[128];
+    memset(expected, 0xa5, sizeof expected);
+    for (unsigned pattern = 0; pattern < sizeof patterns / sizeof patterns[0]; pattern++) {
+        for (int read = 0; read < 2; read++) {
+            for (int terminal = 0; terminal < 2; terminal++) {
+                thalovant_noise s;
+                size_t written = 99;
+                int step = terminal ? (patterns[pattern] == THALOVANT_NOISE_XX ? 3 : 2) : -1;
+                start(&s, THALOVANT_NOISE_XX, 1, 0);
+                s.pattern = patterns[pattern];
+                s.step = step;
+                s.initiator = read ? (step % 2 != 0) : (step % 2 == 0);
+                memcpy(out, expected, sizeof out);
+                int rc = read
+                    ? thalovant_noise_read(&s, message, sizeof message, out, sizeof out, &written)
+                    : thalovant_noise_write(&s, NULL, 0, out, sizeof out, &written);
+                CHECK_INT_EQ(rc, THALOVANT_ERR_INVALID);
+                CHECK(s.failed);
+                CHECK_INT_EQ(written, 0);
+                CHECK(memcmp(out, expected, sizeof out) == 0);
+            }
+        }
+    }
+}
 static void failures(void)
 {
     const char *patterns[] = {"XXpsk2", "KKpsk0"},
@@ -198,5 +227,6 @@ void tlv_test_noise(void)
 {
     primitives();
     transcripts();
+    invalid_handshake_steps();
     failures();
 }

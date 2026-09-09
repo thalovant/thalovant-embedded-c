@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1 - 2026-09-09
+
+- Reject invalid Noise pattern/step combinations before reading handshake token
+  tables, including a caller-modified KK session at terminal step 2. Preserve
+  output buffers, clear reported output length, and wipe failed state.
+- Document the legacy crypto-key entropy requirement without changing its
+  Node-compatible derivation; v3 Noise uses separate AES256 session keys.
+- Add read/write bounds regressions for both patterns and invalid caller state.
+
 ## 0.4.0 - 2026-09-09
 
 - Add allocation-free HiveMind v3 Noise XXpsk2/KKpsk0 with mutually advertised
