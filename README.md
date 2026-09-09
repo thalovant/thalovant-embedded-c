@@ -168,21 +168,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.4.1`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.5.0`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.4.1
+git -C third_party/thalovant-embedded-c checkout v0.5.0
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.4.1)
+  GIT_TAG        v0.5.0)
 ```
 
 Every GitHub release also carries a reproducible source archive
@@ -200,6 +200,7 @@ gh attestation verify thalovant-embedded-c-<version>.tar.gz \
 ```sh
 make            # build/libthalovant.a
 make test       # host-side, offline test suite
+make fuzz       # Clang/libFuzzer, ASan + UBSan; default 60 seconds
 make CC=clang test
 ```
 
@@ -210,3 +211,28 @@ build system, compile `src/*.c` with `-Iinclude`.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+### Fallback handlers and language discovery
+
+`thalovant_fallback_list_build_frame` builds `ovos.skills.fallback.list` on the
+same session as the intent queries. The classifier returns
+`THALOVANT_FALLBACK_LIST_RESPONSE`, with `items_json` pointing to the raw
+`fallbacks` array. Walk it with the JSON scanners to read each `skill_id` and
+`priority`; the integrator owns conversion and sorting.
+
+A successful response carrying `[]` means no registered fallback handlers.
+An absent array, policy refusal, or timeout means unknown. An empty intent
+manifest alone cannot prove the hub cannot answer a language: fallback
+handlers register no intent phrases. Treat enabled phrases, any fallback, or
+unknown fallbacks as evidence that the hub may answer; this is not a language
+support guarantee.
+
+When the intent listing is refused or silent, an integrator may query the
+Adapt and Padatious engine manifests for names only. Keep that result marked
+as `engine-manifests`; a timeout is not proof of policy denial. Networking,
+deadlines, event correlation, and aggregate results remain caller-owned.
+
+The CI fuzz target mutates JSON, identity, wire, ask, intent and codec inputs,
+including short output buffers, under fatal address and undefined-behavior
+sanitizers. Reproduce with `make fuzz FUZZ_SECONDS=120`. Inputs and crash
+artifacts stay under `build/`; the core library gains no dependency.

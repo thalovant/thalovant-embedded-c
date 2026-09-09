@@ -38,7 +38,8 @@ typedef struct {
 /*
  * Tokenize `js` (length `len`, need not be NUL-terminated). Returns the
  * number of tokens produced, THALOVANT_ERR_JSON on syntax errors, or
- * THALOVANT_ERR_NOMEM when `max_toks` is too small.
+ * THALOVANT_ERR_NOMEM when `max_toks` is too small. Lengths beyond INT_MAX
+ * cannot be represented by token offsets and return THALOVANT_ERR_INVALID.
  */
 int thalovant_json_parse(const char *js, size_t len, thalovant_json_tok *toks, int max_toks);
 
@@ -76,7 +77,8 @@ int thalovant_json_unescape(const char *js, const thalovant_json_tok *tok, char 
  */
 int thalovant_json_as_string(const char *js, const thalovant_json_tok *tok, char *out, size_t cap);
 
-/* Integer coercion accepting numbers and numeric strings. */
+/* Integer coercion accepting numbers and numeric strings; overflow and
+ * non-integer input return THALOVANT_ERR_INVALID without changing *out. */
 int thalovant_json_as_int(const char *js, const thalovant_json_tok *tok, long *out);
 
 /*

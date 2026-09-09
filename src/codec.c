@@ -1,5 +1,7 @@
 #include "thalovant/codec.h"
 
+#include <limits.h>
+
 static const char HEX_DIGITS[] = "0123456789abcdef";
 static const char B64_DIGITS[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -8,7 +10,7 @@ int thalovant_hex_encode(const uint8_t *in, size_t len, char *out, size_t cap)
     if (in == NULL || out == NULL) {
         return THALOVANT_ERR_INVALID;
     }
-    if (cap < len * 2 + 1) {
+    if (len > (size_t)INT_MAX / 2 || cap == 0 || len > (cap - 1) / 2) {
         return THALOVANT_ERR_NOMEM;
     }
     for (size_t i = 0; i < len; i++) {
@@ -33,7 +35,7 @@ int thalovant_hex_decode(const char *in, size_t in_len, uint8_t *out, size_t cap
         return THALOVANT_ERR_INVALID;
     }
     size_t bytes = in_len / 2;
-    if (cap < bytes) {
+    if (bytes > (size_t)INT_MAX || cap < bytes) {
         return THALOVANT_ERR_NOMEM;
     }
     for (size_t i = 0; i < bytes; i++) {
@@ -51,6 +53,10 @@ int thalovant_base64_encode(const uint8_t *in, size_t len, char *out, size_t cap
 {
     if (in == NULL || out == NULL) {
         return THALOVANT_ERR_INVALID;
+    }
+    /* Bound the public int result before doing size arithmetic or reading. */
+    if (len > ((size_t)INT_MAX / 4) * 3) {
+        return THALOVANT_ERR_NOMEM;
     }
     size_t out_len = ((len + 2) / 3) * 4;
     if (cap < out_len + 1) {
@@ -99,8 +105,18 @@ int thalovant_base64_decode(const char *in, size_t in_len, uint8_t *out, size_t 
     if (in == NULL || out == NULL) {
         return THALOVANT_ERR_INVALID;
     }
+    /* Also rejects impossible lengths before looking for trailing padding. */
+    if (in_len / 4 > (size_t)INT_MAX / 3) {
+        return THALOVANT_ERR_NOMEM;
+    }
+    size_t padded_len = in_len;
     while (in_len > 0 && in[in_len - 1] == '=') {
         in_len--;
+    }
+    size_t padding = padded_len - in_len;
+    if (padding > 2 || (padding != 0 &&
+        (padded_len % 4 != 0 || in_len % 4 != 4 - padding))) {
+        return THALOVANT_ERR_INVALID;
     }
     if (in_len % 4 == 1) {
         return THALOVANT_ERR_INVALID;
@@ -111,7 +127,7 @@ int thalovant_base64_decode(const char *in, size_t in_len, uint8_t *out, size_t 
     case 3: bytes += 2; break;
     default: break;
     }
-    if (cap < bytes) {
+    if (bytes > (size_t)INT_MAX || cap < bytes) {
         return THALOVANT_ERR_NOMEM;
     }
     size_t o = 0;

@@ -26,7 +26,7 @@ OVERFLOW_BIN := $(BUILD)/thalovant-topics-overflow-tests
 TEST_SRCS := $(filter-out $(OVERFLOW_SRC),$(wildcard tests/*.c))
 TEST_BIN  := $(BUILD)/thalovant-tests
 
-.PHONY: all test clean
+.PHONY: all test fuzz clean
 
 all: $(LIB)
 
@@ -39,7 +39,7 @@ $(BUILD)/%.o: src/%.c $(HDRS) | $(BUILD)
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $^
 
-$(TEST_BIN): $(TEST_SRCS) tests/harness.h $(LIB)
+$(TEST_BIN): $(TEST_SRCS) tests/harness.h $(wildcard tests/fixtures/*.h) $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(TEST_SRCS) $(LIB) -o $@
 
 $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
@@ -48,6 +48,17 @@ $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
 test: $(TEST_BIN) $(OVERFLOW_BIN)
 	./$(TEST_BIN)
 	./$(OVERFLOW_BIN)
+
+# Development/CI only: Clang's instrumentation, no runtime library dependency.
+FUZZ_CC ?= clang
+FUZZ_SECONDS ?= 60
+$(BUILD)/thalovant-fuzz: tests/fuzz/protocol.c $(SRCS) $(HDRS) | $(BUILD)
+	$(FUZZ_CC) $(CPPFLAGS) -O1 -g $(WARNFLAGS) -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer tests/fuzz/protocol.c $(SRCS) -o $@
+
+fuzz: $(BUILD)/thalovant-fuzz
+	mkdir -p $(BUILD)/fuzz-corpus $(BUILD)/fuzz-artifacts
+	cp tests/fuzz/corpus/* $(BUILD)/fuzz-corpus/
+	./$(BUILD)/thalovant-fuzz $(BUILD)/fuzz-corpus -max_total_time=$(FUZZ_SECONDS) -max_len=8192 -timeout=10 -artifact_prefix=$(BUILD)/fuzz-artifacts/
 
 clean:
 	rm -rf $(BUILD)

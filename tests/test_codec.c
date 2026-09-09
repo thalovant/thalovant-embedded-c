@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <limits.h>
 
 #include "harness.h"
 #include "thalovant/codec.h"
@@ -56,4 +57,19 @@ void tlv_test_codec(void)
 {
     test_hex_round_trip();
     test_base64_vectors();
+    uint8_t bytes[8] = { 0 };
+    char encoded[8] = { 0 };
+    CHECK_INT_EQ(thalovant_hex_encode(bytes, SIZE_MAX, encoded, sizeof(encoded)),
+                 THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_base64_encode(bytes, SIZE_MAX, encoded, sizeof(encoded)),
+                 THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_base64_decode(encoded, SIZE_MAX, bytes, sizeof(bytes)),
+                 THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_hex_decode(encoded, (size_t)INT_MAX * 2 + 2, bytes, sizeof(bytes)),
+                 THALOVANT_ERR_NOMEM);
+    const char *invalid[] = { "=", "==", "===", "Zg=", "Zg===", "Zm9v=", "Zm8==" };
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+        CHECK_INT_EQ(thalovant_base64_decode(invalid[i], strlen(invalid[i]), bytes,
+                                             sizeof(bytes)), THALOVANT_ERR_INVALID);
+    }
 }

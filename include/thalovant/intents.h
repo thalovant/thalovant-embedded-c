@@ -78,10 +78,13 @@
 #define THALOVANT_EVENT_INTENT_DESCRIBE "ovos.intent.describe"
 #define THALOVANT_EVENT_INTENT_DESCRIBE_RESPONSE "ovos.intent.describe.response"
 #define THALOVANT_EVENT_POLICY_DENIED "hive.policy.denied"
+#define THALOVANT_EVENT_FALLBACK_LIST "ovos.skills.fallback.list"
+#define THALOVANT_EVENT_FALLBACK_LIST_RESPONSE "ovos.skills.fallback.list.response"
 /*
  * The engines' own manifests: names only ("<skill_id>:<intent_name>"), no
  * language -- the names-only fallback of the desktop SDKs for a connection
- * refused ovos.intent.list. This library defines the names and leaves the
+ * refused ovos.intent.list or receiving no listing before its deadline.
+ * This library defines the names and leaves the
  * query to the integrator (a plain bus frame; the reply is {"intents": [..]}).
  */
 #define THALOVANT_EVENT_ADAPT_MANIFEST_GET "intent.service.adapt.manifest.get"
@@ -134,6 +137,15 @@ int thalovant_intent_describe_build_payload(const thalovant_intent_describe_requ
 int thalovant_intent_describe_build_frame(const thalovant_intent_describe_request *request,
                                           char *out, size_t cap);
 
+/* Fallback handlers have no registered phrases. Query them separately so
+ * an empty intent manifest is not mistaken for a hub unable to answer.
+ * Reuses the list request's session/context fields; include_definitions is
+ * ignored and the query data is {} (fallback handlers are language-neutral). */
+int thalovant_fallback_list_build_payload(const thalovant_intent_list_request *request,
+                                          char *out, size_t cap);
+int thalovant_fallback_list_build_frame(const thalovant_intent_list_request *request,
+                                        char *out, size_t cap);
+
 /* ------------------------------------------------------------- replies */
 
 typedef enum {
@@ -141,6 +153,7 @@ typedef enum {
     THALOVANT_INTENT_LIST_RESPONSE,     /* "ovos.intent.list.response" */
     THALOVANT_INTENT_DESCRIBE_RESPONSE, /* "ovos.intent.describe.response" */
     THALOVANT_INTENT_POLICY_DENIED,     /* "hive.policy.denied" */
+    THALOVANT_FALLBACK_LIST_RESPONSE,   /* "ovos.skills.fallback.list.response" */
 } thalovant_intent_kind;
 
 typedef enum {
@@ -160,7 +173,8 @@ typedef struct {
      * false) and data.error ("" when absent). */
     bool ok;
     char error[THALOVANT_INTENT_ERROR_MAX];
-    /* Raw JSON slice of data.intents (list) or data.definitions (describe)
+    /* Raw JSON slice of data.intents (list), data.definitions (describe),
+     * or data.fallbacks (fallback list)
      * inside the frame buffer, and its element count; NULL/0 when absent.
      * Walk it with thalovant_intent_list_rows / thalovant_intent_definitions. */
     const char *items_json;
@@ -181,6 +195,14 @@ typedef struct {
     size_t allowed_len;
     int allowed_count;
 } thalovant_intent_event;
+
+/* A fallback response is known only when ok is true and items_json is
+ * non-NULL, including a valid empty array. Silence, policy denial or a
+ * missing/malformed array means unknown, never "no fallback handlers".
+ * Use scan_next/scan_key on items_json to read skill_id and priority in
+ * bounded memory. The integrator owns priority conversion, sorting and
+ * may-answer inference: enabled phrases OR any fallback OR unknown
+ * fallbacks. A fallback's presence is not proof it supports a language. */
 
 /*
  * Classify a decrypted plaintext HiveMessage frame against `request_id`

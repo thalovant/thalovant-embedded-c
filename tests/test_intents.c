@@ -15,6 +15,7 @@
 #include "harness.h"
 #include "thalovant/intents.h"
 #include "thalovant/json.h"
+#include "fixtures/introspection-node.h"
 
 #define WEATHER "thalovant-skill-weather.thalovant"
 #define SHADOW "thalovant-skill-custos-shadow.thalovant"
@@ -782,8 +783,42 @@ static void test_malformed_manifest_is_refused(void)
     CHECK_INT_EQ(samples.count, 1);
 }
 
+static void test_fallback_introspection(void)
+{
+    thalovant_intent_list_request request = { "en-us", "sess-1", "kitchen", "req-1", true };
+    char out[1024];
+    CHECK(thalovant_fallback_list_build_frame(&request, out, sizeof(out)) > 0);
+    CHECK_STR_EQ(out, FALLBACK_REQUEST_NODE);
+    CHECK_INT_EQ(thalovant_fallback_list_build_frame(&request, out, 8), THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_fallback_list_build_payload(NULL, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+    request.request_id = "";
+    CHECK_INT_EQ(thalovant_fallback_list_build_frame(&request, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+
+    const char *present = "{\"type\":\"ovos.skills.fallback.list.response\",\"data\":{"
+        "\"fallbacks\":[{\"skill_id\":\"example.skill\",\"priority\":50}]},"
+        "\"context\":{\"request_id\":\"req-1\"}}";
+    thalovant_intent_event event;
+    CHECK_INT_EQ(classify(present, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_FALLBACK_LIST_RESPONSE);
+    CHECK_INT_EQ(event.count, 1);
+    CHECK(event.ok && event.items_json != NULL);
+    CHECK_INT_EQ(classify(present, "other-request", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_IGNORE);
+    const char *empty = "{\"type\":\"ovos.skills.fallback.list.response\",\"data\":{\"fallbacks\":[]}}";
+    CHECK_INT_EQ(classify(empty, "req-1", &event), THALOVANT_OK);
+    CHECK(event.ok && event.items_json != NULL && event.count == 0);
+    const char *unknown = "{\"type\":\"ovos.skills.fallback.list.response\",\"data\":{}}";
+    CHECK_INT_EQ(classify(unknown, "req-1", &event), THALOVANT_OK);
+    CHECK(event.items_json == NULL);
+    const char *malformed = "{\"type\":\"ovos.skills.fallback.list.response\",\"data\":{\"fallbacks\":[1,]}}";
+    CHECK_INT_EQ(classify(malformed, "req-1", &event), THALOVANT_ERR_JSON);
+}
+
 void tlv_test_intents(void)
 {
+    test_fallback_introspection();
     test_build_list_query();
     test_build_describe_query();
     test_list_response_rows();
