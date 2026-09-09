@@ -16,6 +16,11 @@ protocol-specific:
   identity's `topic_prefix` (trimmed and validated: wildcards and control
   characters are rejected, oversized topics never silently truncate), plus
   connection endpoint/port parsing and client-id derivation.
+- **`thalovant_noise`** — HiveMind v3 XXpsk2/KKpsk0, X25519,
+  AES-256-GCM, SHA-256/HKDF and the exact Argon2id PSK derivation. Ordered
+  encrypted frames and chunk sequencing fail closed. Static identity and hub
+  pins persist in caller storage; the core never allocates. See the
+  [v3 integration guide](docs/noise-v3.md).
 - **`thalovant_aes_gcm`** — self-contained AES-128-GCM (16-byte HiveMind
   nonces and 12-byte legacy nonces) with constant-time tag verification,
   validated against NIST vectors and known-answer vectors generated with
@@ -57,7 +62,22 @@ defines.
 | Event loop / timers           | frame classifier + ask-loop semantics      |
 | Identity JSON storage         | identity parser                            |
 
-## Quick sketch (MQTT)
+## HiveMind v3 integration
+
+New integrations use [the Noise v3 guide](docs/noise-v3.md). Select a mutually
+advertised suite and pattern, run the handshake before declaring readiness,
+then wrap application JSON in ordered Noise binary frames. This library
+supports `25519_AESGCM_SHA256`; a ChaChaPoly-only offer is rejected.
+
+The optional in-tree Argon2id derivation needs 64 MiB of caller scratch.
+Smaller devices may provision the exact prederived PSK securely; they must
+still persist a static X25519 key, verify the hub pin, and generate a fresh
+ephemeral key for every connection. The library adds no socket or broker.
+
+## Legacy v2 sketch (MQTT)
+
+The following retained helpers apply only to legacy v2 hubs. Their
+`crypto_key` envelope is incompatible with a v3-only listener.
 
 ```c
 #include "thalovant/thalovant.h"
@@ -148,21 +168,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.3.0`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.4.0`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.3.0
+git -C third_party/thalovant-embedded-c checkout v0.4.0
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.3.0)
+  GIT_TAG        v0.4.0)
 ```
 
 Every GitHub release also carries a reproducible source archive

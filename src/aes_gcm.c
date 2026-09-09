@@ -91,6 +91,83 @@ void thalovant_aes128_encrypt_block(const thalovant_aes128_ctx *ctx, const uint8
     memcpy(out, s, 16);
 }
 
+/* AES-256 for Noise. No secret-indexed table lookups. */
+static uint8_t aes_mul(uint8_t a, uint8_t b)
+{
+    uint8_t r = 0;
+    for (unsigned i = 0; i < 8; i++) {
+        r ^= (uint8_t)(a & (uint8_t)(0u - (b & 1u)));
+        a = xtime(a); b >>= 1;
+    }
+    return r;
+}
+static uint8_t aes_sub(uint8_t x)
+{
+    uint8_t y = 1, p = x;
+    for (unsigned i = 0; i < 8; i++) {
+        if ((254u >> i) & 1u) y = aes_mul(y, p);
+        p = aes_mul(p, p);
+    }
+    return (uint8_t)(y ^ ((y << 1) | (y >> 7)) ^ ((y << 2) | (y >> 6)) ^
+                     ((y << 3) | (y >> 5)) ^ ((y << 4) | (y >> 4)) ^ 0x63u);
+}
+void thalovant_aes256_init(thalovant_aes256_ctx *ctx, const uint8_t key[32])
+{
+    uint8_t *rk = ctx->round_keys;
+    memcpy(rk, key, 32);
+    for (unsigned i = 32, rcon = 0; i < 240; i += 4) {
+        uint8_t t[4]; memcpy(t, rk + i - 4, 4);
+        if (i % 32 == 0) {
+            uint8_t first = t[0];
+            t[0] = (uint8_t)(aes_sub(t[1]) ^ RCON[rcon++]);
+            t[1] = aes_sub(t[2]); t[2] = aes_sub(t[3]); t[3] = aes_sub(first);
+        } else if (i % 32 == 16) {
+            for (unsigned j = 0; j < 4; j++) t[j] = aes_sub(t[j]);
+        }
+        for (unsigned j = 0; j < 4; j++) rk[i + j] = (uint8_t)(rk[i + j - 32] ^ t[j]);
+    }
+}
+void thalovant_aes256_encrypt_block(const thalovant_aes256_ctx *ctx, const uint8_t in[16],
+                                    uint8_t out[16])
+{
+    uint8_t s[16];
+    const uint8_t *rk = ctx->round_keys;
+    for (int i = 0; i < 16; i++) {
+        s[i] = (uint8_t)(in[i] ^ rk[i]);
+    }
+    for (int round = 1; round <= 14; round++) {
+        /* SubBytes */
+        for (int i = 0; i < 16; i++) {
+            s[i] = aes_sub(s[i]);
+        }
+        /* ShiftRows (state is column-major: s[c*4 + r]) */
+        uint8_t t;
+        t = s[1]; s[1] = s[5]; s[5] = s[9]; s[9] = s[13]; s[13] = t;
+        t = s[2]; s[2] = s[10]; s[10] = t;
+        t = s[6]; s[6] = s[14]; s[14] = t;
+        t = s[15]; s[15] = s[11]; s[11] = s[7]; s[7] = s[3]; s[3] = t;
+        /* MixColumns (skipped in the final round) */
+        if (round != 14) {
+            for (int c = 0; c < 4; c++) {
+                uint8_t *col = s + c * 4;
+                uint8_t a0 = col[0], a1 = col[1], a2 = col[2], a3 = col[3];
+                uint8_t all = (uint8_t)(a0 ^ a1 ^ a2 ^ a3);
+                col[0] ^= (uint8_t)(all ^ xtime((uint8_t)(a0 ^ a1)));
+                col[1] ^= (uint8_t)(all ^ xtime((uint8_t)(a1 ^ a2)));
+                col[2] ^= (uint8_t)(all ^ xtime((uint8_t)(a2 ^ a3)));
+                col[3] ^= (uint8_t)(all ^ xtime((uint8_t)(a3 ^ a0)));
+            }
+        }
+        /* AddRoundKey */
+        const uint8_t *round_key = rk + round * 16;
+        for (int i = 0; i < 16; i++) {
+            s[i] ^= round_key[i];
+        }
+    }
+    memcpy(out, s, 16);
+}
+
+
 /* -------------------------------------------------------------------- GCM */
 
 /* GF(2^128) multiplication, right-shift variant with R = 0xe1 || 0^120. */
@@ -100,19 +177,14 @@ static void gf128_mul(uint8_t r[16], const uint8_t x[16], const uint8_t y[16])
     uint8_t v[16];
     memcpy(v, y, 16);
     for (int i = 0; i < 128; i++) {
-        if (x[i / 8] & (uint8_t)(0x80 >> (i % 8))) {
-            for (int j = 0; j < 16; j++) {
-                z[j] ^= v[j];
-            }
-        }
+        uint8_t mask = (uint8_t)(0u - ((x[i / 8] >> (7 - i % 8)) & 1u));
+        for (int j = 0; j < 16; j++) z[j] ^= (uint8_t)(v[j] & mask);
         uint8_t lsb = (uint8_t)(v[15] & 1);
         for (int j = 15; j > 0; j--) {
             v[j] = (uint8_t)((v[j] >> 1) | (v[j - 1] << 7));
         }
         v[0] >>= 1;
-        if (lsb) {
-            v[0] ^= 0xe1;
-        }
+        v[0] ^= (uint8_t)(0xe1u & (0u - lsb));
     }
     memcpy(r, z, 16);
 }
@@ -318,5 +390,106 @@ int thalovant_crypto_runtime_key(const char *crypto_key, uint8_t out[16])
         return THALOVANT_ERR_INVALID;
     }
     memcpy(out, start, 16);
+    return THALOVANT_OK;
+}
+
+static void gcm_ctr256(const thalovant_aes256_ctx *aes, uint8_t counter[16], const uint8_t *in,
+                    size_t len, uint8_t *out)
+{
+    uint8_t keystream[16];
+    while (len > 0) {
+        inc32(counter);
+        thalovant_aes256_encrypt_block(aes, counter, keystream);
+        size_t take = len < 16 ? len : 16;
+        for (size_t i = 0; i < take; i++) {
+            out[i] = (uint8_t)(in[i] ^ keystream[i]);
+        }
+        in += take;
+        out += take;
+        len -= take;
+    }
+}
+
+static void gcm_tag256(const thalovant_aes256_ctx *aes, const uint8_t h[16], const uint8_t j0[16],
+                    const uint8_t *aad, size_t aad_len, const uint8_t *ciphertext, size_t ct_len,
+                    uint8_t tag[16])
+{
+    tlv_ghash g;
+    ghash_init(&g, h);
+    if (aad_len > 0) {
+        ghash_update(&g, aad, aad_len);
+    }
+    if (ct_len > 0) {
+        ghash_update(&g, ciphertext, ct_len);
+    }
+    ghash_lengths(&g, (uint64_t)aad_len, (uint64_t)ct_len);
+    uint8_t e_j0[16];
+    thalovant_aes256_encrypt_block(aes, j0, e_j0);
+    for (int i = 0; i < 16; i++) {
+        tag[i] = (uint8_t)(g.y[i] ^ e_j0[i]);
+    }
+}
+
+static int gcm_setup256(const uint8_t key[32], const uint8_t *nonce, size_t nonce_len,
+                     thalovant_aes256_ctx *aes, uint8_t h[16], uint8_t j0[16])
+{
+    if (key == NULL || nonce == NULL || nonce_len == 0) {
+        return THALOVANT_ERR_INVALID;
+    }
+    thalovant_aes256_init(aes, key);
+    uint8_t zero[16] = { 0 };
+    thalovant_aes256_encrypt_block(aes, zero, h);
+    derive_j0(h, nonce, nonce_len, j0);
+    return THALOVANT_OK;
+}
+
+int thalovant_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce, size_t nonce_len,
+                              const uint8_t *aad, size_t aad_len, const uint8_t *plaintext,
+                              size_t plaintext_len, uint8_t *ciphertext,
+                              uint8_t tag[THALOVANT_GCM_TAG_LEN])
+{
+    if ((plaintext == NULL && plaintext_len > 0) || (ciphertext == NULL && plaintext_len > 0) ||
+        tag == NULL || (aad == NULL && aad_len > 0)) {
+        return THALOVANT_ERR_INVALID;
+    }
+    thalovant_aes256_ctx aes;
+    uint8_t h[16];
+    uint8_t j0[16];
+    int rc = gcm_setup256(key, nonce, nonce_len, &aes, h, j0);
+    if (rc != THALOVANT_OK) {
+        return rc;
+    }
+    uint8_t counter[16];
+    memcpy(counter, j0, 16);
+    gcm_ctr256(&aes, counter, plaintext, plaintext_len, ciphertext);
+    gcm_tag256(&aes, h, j0, aad, aad_len, ciphertext, plaintext_len, tag);
+    return THALOVANT_OK;
+}
+
+int thalovant_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce, size_t nonce_len,
+                              const uint8_t *aad, size_t aad_len, const uint8_t *ciphertext,
+                              size_t ciphertext_len, const uint8_t tag[THALOVANT_GCM_TAG_LEN],
+                              uint8_t *plaintext)
+{
+    if ((ciphertext == NULL && ciphertext_len > 0) || (plaintext == NULL && ciphertext_len > 0) ||
+        tag == NULL || (aad == NULL && aad_len > 0)) {
+        return THALOVANT_ERR_INVALID;
+    }
+    thalovant_aes256_ctx aes;
+    uint8_t h[16];
+    uint8_t j0[16];
+    int rc = gcm_setup256(key, nonce, nonce_len, &aes, h, j0);
+    if (rc != THALOVANT_OK) {
+        return rc;
+    }
+    /* Verify over the ciphertext before releasing any plaintext. */
+    uint8_t expected[16];
+    gcm_tag256(&aes, h, j0, aad, aad_len, ciphertext, ciphertext_len, expected);
+    if (thalovant_ct_compare(expected, tag, 16) != 0) {
+        return THALOVANT_ERR_AUTH;
+    }
+    uint8_t counter[16];
+    memcpy(counter, j0, 16);
+    gcm_ctr256(&aes, counter, ciphertext, ciphertext_len, plaintext);
     return THALOVANT_OK;
 }

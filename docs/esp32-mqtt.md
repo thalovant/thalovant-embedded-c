@@ -1,5 +1,9 @@
 # ESP32 (ESP-IDF) + esp-mqtt integration
 
+This retained example is for **legacy v2 hubs only**. A current HiveMind v3
+listener requires the [Noise handshake and framing](noise-v3.md); replace the
+legacy key/hello/envelope steps below with that integration.
+
 This sketch shows how a satellite built on ESP-IDF wires the library to
 `esp-mqtt`. It is documentation only — the snippets are illustrative and
 not compiled in this repository.

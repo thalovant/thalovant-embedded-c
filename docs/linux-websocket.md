@@ -1,5 +1,9 @@
 # Linux + libwebsockets integration
 
+This retained example is for **legacy v2 hubs only**. A current HiveMind v3
+listener requires the [Noise handshake and framing](noise-v3.md); replace the
+legacy key/hello/envelope steps below with that integration.
+
 This sketch shows how a Linux SBC satellite wires the library to
 libwebsockets (an `esp_websocket_client` port is analogous). Documentation
 only — the snippets are illustrative and not compiled in this repository.
@@ -18,7 +22,7 @@ thalovant_crypto_runtime_key(identity.crypto_key, key);
 /* WSS endpoint: from the identity's data-plane endpoints, or
  * default_master when it is already a ws(s):// URL. */
 char authorization[256];
-thalovant_wire_authorization("ThalovantEmbeddedC/0.3.0", identity.access_key,
+thalovant_wire_authorization("ThalovantEmbeddedC/0.4.0", identity.access_key,
                              authorization, sizeof(authorization));
 
 char url[512];

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 - 2026-09-09
+
+- Add allocation-free HiveMind v3 Noise XXpsk2/KKpsk0 with mutually advertised
+  AESGCM negotiation, X25519, SHA256/HKDF, AES256-GCM and the exact Argon2id PSK.
+- Enforce persisted caller hub pins, ordered transport counters, chunk sequence
+  checks, and terminal authentication/protocol errors. Caller owns networking,
+  entropy, static keys, pin storage and reassembly; 64 MiB Argon scratch is
+  optional when the exact prederived PSK is securely provisioned.
+- Add independent Node XX/KK transcripts, RFC X25519, NIST AES256, Argon KATs,
+  tamper/replay/pin/capacity/reconnect tests. Legacy API remains available and
+  its examples are explicitly marked v2-only.
+
 ## 0.3.0 - 2026-09-05
 
 - `thalovant_intent_list_rows` returns the new `THALOVANT_ERR_HUB_REFUSED`

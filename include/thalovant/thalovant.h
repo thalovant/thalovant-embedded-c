@@ -2,6 +2,8 @@
 #ifndef THALOVANT_THALOVANT_H
 #define THALOVANT_THALOVANT_H
 
+
+#include "thalovant/noise.h"
 #include "thalovant/aes_gcm.h"
 #include "thalovant/ask.h"
 #include "thalovant/codec.h"

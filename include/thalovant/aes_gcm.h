@@ -64,4 +64,15 @@ int thalovant_crypto_runtime_key(const char *crypto_key, uint8_t out[16]);
 /* Constant-time byte comparison; returns 0 when equal. */
 int thalovant_ct_compare(const uint8_t *a, const uint8_t *b, size_t len);
 
+/* AES-256-GCM with constant-time algebraic S-box, used by v3 Noise. */
+typedef struct { uint8_t round_keys[240]; } thalovant_aes256_ctx;
+void thalovant_aes256_init(thalovant_aes256_ctx *ctx, const uint8_t key[32]);
+void thalovant_aes256_encrypt_block(const thalovant_aes256_ctx *ctx,
+                                   const uint8_t in[16], uint8_t out[16]);
+int thalovant_aes256_gcm_encrypt(const uint8_t key[32], const uint8_t *nonce, size_t nonce_len,
+ const uint8_t *aad, size_t aad_len, const uint8_t *plaintext, size_t plaintext_len,
+ uint8_t *ciphertext, uint8_t tag[16]);
+int thalovant_aes256_gcm_decrypt(const uint8_t key[32], const uint8_t *nonce, size_t nonce_len,
+ const uint8_t *aad, size_t aad_len, const uint8_t *ciphertext, size_t ciphertext_len,
+ const uint8_t tag[16], uint8_t *plaintext);
 #endif /* THALOVANT_AES_GCM_H */
