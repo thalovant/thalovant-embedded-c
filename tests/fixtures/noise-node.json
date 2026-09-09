@@ -1,4 +1,6 @@
 {
+  "reference_version": "0.3.3",
+  "compiled_source_sha256": "4955160de77c00ced0f0ef0c241332144d8bebc98512eb95aa3da659db9f87bd",
   "source": "Thalovant Node SDK Noise with @noble primitives; synthetic keys",
   "password": "fixture-password",
   "node_id": "fixture-hub",

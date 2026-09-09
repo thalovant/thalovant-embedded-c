@@ -1,18 +1,21 @@
 // Capture deterministic wire bytes from Thalovant Node's independent Noise
 // implementation (@noble primitives), not the C implementation under test.
 // Usage: node tools/generate-noise-vectors.mjs /path/to/built/thalovant-node-sdk
-// Tested with Node SDK 0.3.3 (7bd30c source discovery), @noble 2.x.
+// The output records the reference package version and compiled-source hash.
 // All keys/passwords below are public synthetic fixtures, never credentials.
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 const root = resolve(process.argv[2]);
 const req = createRequire(join(root, 'package.json'));
 // Load an isolated copy, replacing ONLY the ephemeral entropy source. The
 // reference implementation is otherwise unchanged; source tree stays untouched.
 const path = join(root, 'dist/src/noise.js');
 let source = await readFile(path, 'utf8');
+const sourceHash = createHash('sha256').update(source).digest('hex');
+const referenceVersion = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 if (!source.includes('x25519.utils.randomSecretKey()')) throw new Error('unknown reference entropy call');
 source = source.replaceAll('x25519.utils.randomSecretKey()', 'new Uint8Array(globalThis.__thalovantVectorEphemeral)');
 source = source.replace(/from ["']([^"']+)["']/g, (_, spec) => `from ${JSON.stringify(pathToFileURL(spec.startsWith('.') ? resolve(root, 'dist/src', spec) : req.resolve(spec)).href)}`);
@@ -24,7 +27,7 @@ const staticI = bytes(0x11), staticR = bytes(0x22), eI = bytes(0x33), eR = bytes
 const hello = { node_id: 'fixture-hub', peer: 'test', pubkey: '', label: 'café/voice' };
 const offer = { max_protocol_version: 3, binarize: true, encodings: ['JSON-HEX'], ciphers: ['AES-GCM'], noise: { patterns: ['XXpsk2','KKpsk0'], suites: ['25519_ChaChaPoly_SHA256', '25519_AESGCM_SHA256'] } };
 const psk = n.derivePsk('fixture-password', hello.node_id);
-const result = { source: 'Thalovant Node SDK Noise with @noble primitives; synthetic keys', password: 'fixture-password', node_id: hello.node_id, psk: hex(psk), hello, offer, static_i:hex(staticI),static_r:hex(staticR),ephemeral_i:hex(eI),ephemeral_r:hex(eR),public_i:hex(n.x25519PublicKey(staticI)),public_r:hex(n.x25519PublicKey(staticR)),exchanges:[] };
+const result = { reference_version: referenceVersion, compiled_source_sha256: sourceHash, source: 'Thalovant Node SDK Noise with @noble primitives; synthetic keys', password: 'fixture-password', node_id: hello.node_id, psk: hex(psk), hello, offer, static_i:hex(staticI),static_r:hex(staticR),ephemeral_i:hex(eI),ephemeral_r:hex(eR),public_i:hex(n.x25519PublicKey(staticI)),public_r:hex(n.x25519PublicKey(staticR)),exchanges:[] };
 for (const suite of n.NOISE_SUITES) for (const pattern of ['XXpsk2','KKpsk0']) {
   const protocol = n.noiseProtocolName(pattern,suite), prologue = n.buildPrologue(hello,offer,protocol);
   const i = new n.NoiseHandshake(pattern,suite,psk,prologue,staticI,pattern==='KKpsk0'?n.x25519PublicKey(staticR):undefined);
