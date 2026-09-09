@@ -18,3 +18,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: make CC=${{ matrix.compiler }}
       - run: make test CC=${{ matrix.compiler }}
+
+  sanitizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: make test CC=clang CFLAGS="-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer"
