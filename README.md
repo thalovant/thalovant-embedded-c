@@ -208,11 +208,7 @@ Requires only a C99 compiler; builds warning-free with
 `-Wall -Wextra -Werror -pedantic` on gcc and clang. To embed in your own
 build system, compile `src/*.c` with `-Iinclude`.
 
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-### Fallback handlers and language discovery
+## Fallback handlers and language discovery
 
 `thalovant_fallback_list_build_frame` builds `ovos.skills.fallback.list` on the
 same session as the intent queries. The classifier returns
@@ -236,3 +232,7 @@ The CI fuzz target mutates JSON, identity, wire, ask, intent and codec inputs,
 including short output buffers, under fatal address and undefined-behavior
 sanitizers. Reproduce with `make fuzz FUZZ_SECONDS=120`. Inputs and crash
 artifacts stay under `build/`; the core library gains no dependency.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

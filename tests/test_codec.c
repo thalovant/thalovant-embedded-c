@@ -65,8 +65,10 @@ void tlv_test_codec(void)
                  THALOVANT_ERR_NOMEM);
     CHECK_INT_EQ(thalovant_base64_decode(encoded, SIZE_MAX, bytes, sizeof(bytes)),
                  THALOVANT_ERR_NOMEM);
+#if SIZE_MAX / 2 > INT_MAX
     CHECK_INT_EQ(thalovant_hex_decode(encoded, (size_t)INT_MAX * 2 + 2, bytes, sizeof(bytes)),
                  THALOVANT_ERR_NOMEM);
+#endif
     const char *invalid[] = { "=", "==", "===", "Zg=", "Zg===", "Zm9v=", "Zm8==" };
     for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
         CHECK_INT_EQ(thalovant_base64_decode(invalid[i], strlen(invalid[i]), bytes,
