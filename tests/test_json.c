@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <limits.h>
 
 #include "harness.h"
 #include "thalovant/json.h"
@@ -54,6 +55,45 @@ static void test_unescape(void)
     int len = thalovant_json_unescape(js, &toks[0], buf, sizeof(buf));
     CHECK(len > 0);
     CHECK_STR_EQ(buf, "a\n\t\"\\\xc3\xa9\xf0\x9f\x98\x80" "b");
+}
+
+static void test_number_grammar_and_range(void)
+{
+    const char *invalid[] = { "-", "01", "-01", "1.", "1e", "1e+", "1e-",
+                             "1+2", "--1", "1..2", "0x10", "+1", ".1" };
+    const char *valid[] = { "0", "-0", "1", "-42", "0.1", "-0.25", "1e2",
+                           "1E+2", "1E-2", "1.25e+10" };
+    thalovant_json_tok tok[2];
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+        size_t len = strlen(invalid[i]);
+        CHECK_INT_EQ(thalovant_json_parse(invalid[i], len, tok, 2), THALOVANT_ERR_JSON);
+        CHECK_INT_EQ(thalovant_json_scan(invalid[i], len, 0, tok), THALOVANT_ERR_JSON);
+    }
+    for (size_t i = 0; i < sizeof(valid) / sizeof(valid[0]); i++) {
+        size_t len = strlen(valid[i]);
+        CHECK_INT_EQ(thalovant_json_parse(valid[i], len, tok, 2), 1);
+        CHECK_INT_EQ(thalovant_json_scan(valid[i], len, 0, tok), (int)len);
+    }
+    char number[64];
+    long out = 17;
+    /* Appending a zero overflows on both 32-bit and 64-bit long hosts. */
+    (void)snprintf(number, sizeof(number), "%ld0", LONG_MAX);
+    CHECK_INT_EQ(thalovant_json_parse(number, strlen(number), tok, 2), 1);
+    CHECK_INT_EQ(thalovant_json_as_int(number, tok, &out), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(out, 17);
+    (void)snprintf(number, sizeof(number), "%ld0", LONG_MIN);
+    CHECK_INT_EQ(thalovant_json_parse(number, strlen(number), tok, 2), 1);
+    CHECK_INT_EQ(thalovant_json_as_int(number, tok, &out), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(out, 17);
+    (void)snprintf(number, sizeof(number), "%ld", LONG_MAX);
+    CHECK_INT_EQ(thalovant_json_parse(number, strlen(number), tok, 2), 1);
+    CHECK_INT_EQ(thalovant_json_as_int(number, tok, &out), THALOVANT_OK);
+    CHECK_INT_EQ(out, LONG_MAX);
+    CHECK_INT_EQ(thalovant_json_as_int(number, tok, NULL), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(thalovant_json_parse("0", (size_t)INT_MAX + 1, tok, 2),
+                 THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(thalovant_json_scan("0", (size_t)INT_MAX + 1, 0, tok),
+                 THALOVANT_ERR_INVALID);
 }
 
 static void test_aliases_skip_null(void)
@@ -321,6 +361,7 @@ void tlv_test_json(void)
 {
     test_basic_parse();
     test_syntax_errors();
+    test_number_grammar_and_range();
     test_unescape();
     test_aliases_skip_null();
     test_coercion();

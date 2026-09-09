@@ -17,7 +17,9 @@
  *    waiting briefly for a speak reply if none arrived yet.
  *  - INTENT_FAILURE ("complete_intent_failure" legacy Mycroft name, or
  *    "ovos.intent.unmatched" current OVOS name): recorded as a failure
- *    event but does not terminate the wait by itself.
+ *    event but does not terminate the wait by itself. Later speech or a
+ *    successful handled event supersedes this soft miss; a fallback may
+ *    answer after the primary intent engine found no match.
  *  - POLICY_DENIED ("hive.policy.denied") and QUERY_TIMEOUT
  *    ("hive.query.timeout"): terminal failures.
  * Events whose request id does not match — or that carry no request id at

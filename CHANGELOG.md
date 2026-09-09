@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 - 2026-09-09
+
+- Add fallback-handler query builders and reply classification, preserving
+  unknown versus known-empty inventories. Document silent manifest fallback
+  and successful replies superseding a soft intent miss.
+- Reject codec sizes that overflow size arithmetic or the public int result,
+  malformed Base64 padding, malformed JSON numbers, unrepresentable JSON
+  offsets, and overflowing integer conversions.
+- Add a Node-generated fallback-query fixture and regression cases. Run
+  network-free protocol fuzzing with fatal ASan/UBSan checks in every PR's CI,
+  alongside the GCC/Clang unit suites and sanitizer suite.
+
 ## 0.4.1 - 2026-09-09
 
 - Reject invalid Noise pattern/step combinations before reading handshake token

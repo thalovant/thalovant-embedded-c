@@ -173,6 +173,31 @@ int thalovant_intent_describe_build_frame(const thalovant_intent_describe_reques
     return thalovant_wire_serialize(&msg, out, cap);
 }
 
+int thalovant_fallback_list_build_payload(const thalovant_intent_list_request *request,
+                                          char *out, size_t cap)
+{
+    if (request == NULL || out == NULL || request->session_id == NULL ||
+        request->request_id == NULL || request->request_id[0] == '\0') {
+        return THALOVANT_ERR_INVALID;
+    }
+    size_t pos = 0;
+    int rc = append(out, cap, &pos, "{\"type\":\"" THALOVANT_EVENT_FALLBACK_LIST "\",\"data\":{}");
+    if (rc != THALOVANT_OK) return rc;
+    rc = append_context(out, cap, &pos, request->lang != NULL ? request->lang : "en-us",
+                        request->session_id, request->site_id, request->request_id);
+    return rc == THALOVANT_OK ? (int)pos : rc;
+}
+
+int thalovant_fallback_list_build_frame(const thalovant_intent_list_request *request,
+                                        char *out, size_t cap)
+{
+    char payload[TLV_INTENT_PAYLOAD_CAP];
+    int rc = thalovant_fallback_list_build_payload(request, payload, sizeof(payload));
+    if (rc < 0) return rc;
+    thalovant_hive_message msg = { "bus", payload, NULL, NULL, NULL, NULL, NULL, NULL };
+    return thalovant_wire_serialize(&msg, out, cap);
+}
+
 /* ------------------------------------------------------- field readers */
 
 /*
@@ -358,6 +383,8 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
         kind = THALOVANT_INTENT_DESCRIBE_RESPONSE;
     } else if (thalovant_json_str_eq(frame_json, &type, THALOVANT_EVENT_POLICY_DENIED)) {
         kind = THALOVANT_INTENT_POLICY_DENIED;
+    } else if (thalovant_json_str_eq(frame_json, &type, THALOVANT_EVENT_FALLBACK_LIST_RESPONSE)) {
+        kind = THALOVANT_FALLBACK_LIST_RESPONSE;
     } else {
         return THALOVANT_OK;
     }
@@ -446,8 +473,18 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
                                      sizeof(out->error))) != THALOVANT_OK)
             return rc;
         thalovant_json_tok items;
-        const char *key = kind == THALOVANT_INTENT_LIST_RESPONSE ? "intents" : "definitions";
+        const char *key = kind == THALOVANT_INTENT_LIST_RESPONSE ? "intents" :
+                          kind == THALOVANT_FALLBACK_LIST_RESPONSE ? "fallbacks" : "definitions";
         if (read_container(frame_json, &data, key, THALOVANT_JSON_ARRAY, &items)) {
+            if (kind == THALOVANT_FALLBACK_LIST_RESPONSE) {
+                /* Never advertise malformed fallback data as known empty. */
+                size_t cursor = 0;
+                thalovant_json_tok elem;
+                int item_rc;
+                while ((item_rc = thalovant_json_scan_next(frame_json, &items, &cursor,
+                                                           &elem)) == 1) { }
+                if (item_rc < 0) return item_rc;
+            }
             out->items_json = frame_json + items.start;
             out->items_len = (size_t)(items.end - items.start);
             out->count = items.size;

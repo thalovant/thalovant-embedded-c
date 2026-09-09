@@ -1,0 +1,1 @@
+{"msg_type":"bus","payload":{"type":"speak","data":{"utterance":"hello"},"context":{"request_id":"fuzz-request"}}}

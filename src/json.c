@@ -1,6 +1,8 @@
 #include "thalovant/json.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -138,16 +140,29 @@ static int check_primitive(const char *s, size_t n)
         }
         return THALOVANT_OK;
     }
-    for (size_t i = 0; i < n; i++) {
-        char c = s[i];
-        if (!((c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E')) {
-            return THALOVANT_ERR_JSON;
-        }
-    }
-    if (!(s[0] == '-' || (s[0] >= '0' && s[0] <= '9'))) {
+    /* RFC 8259 section 6: -? (0 | [1-9][0-9]*) frac? exp?. */
+    size_t i = s[0] == '-' ? 1 : 0;
+    if (i == n) return THALOVANT_ERR_JSON;
+    if (s[i] == '0') {
+        i++;
+    } else if (s[i] >= '1' && s[i] <= '9') {
+        do { i++; } while (i < n && s[i] >= '0' && s[i] <= '9');
+    } else {
         return THALOVANT_ERR_JSON;
     }
-    return THALOVANT_OK;
+    if (i < n && s[i] == '.') {
+        size_t start = ++i;
+        while (i < n && s[i] >= '0' && s[i] <= '9') i++;
+        if (i == start) return THALOVANT_ERR_JSON;
+    }
+    if (i < n && (s[i] == 'e' || s[i] == 'E')) {
+        i++;
+        if (i < n && (s[i] == '+' || s[i] == '-')) i++;
+        size_t start = i;
+        while (i < n && s[i] >= '0' && s[i] <= '9') i++;
+        if (i == start) return THALOVANT_ERR_JSON;
+    }
+    return i == n ? THALOVANT_OK : THALOVANT_ERR_JSON;
 }
 
 static int parse_primitive(tlv_parser *p, int parent)
@@ -255,7 +270,7 @@ static int parse_value(tlv_parser *p, int parent, int depth)
 
 int thalovant_json_parse(const char *js, size_t len, thalovant_json_tok *toks, int max_toks)
 {
-    if (js == NULL || toks == NULL || max_toks <= 0) {
+    if (js == NULL || toks == NULL || max_toks <= 0 || len > (size_t)INT_MAX) {
         return THALOVANT_ERR_INVALID;
     }
     tlv_parser p = { js, len, 0, toks, max_toks, 0 };
@@ -480,6 +495,7 @@ int thalovant_json_as_string(const char *js, const thalovant_json_tok *tok, char
 
 int thalovant_json_as_int(const char *js, const thalovant_json_tok *tok, long *out)
 {
+    if (out == NULL) return THALOVANT_ERR_INVALID;
     char buf[32];
     int len = thalovant_json_as_string(js, tok, buf, sizeof(buf));
     if (len < 0) {
@@ -489,8 +505,9 @@ int thalovant_json_as_int(const char *js, const thalovant_json_tok *tok, long *o
         return THALOVANT_ERR_MISSING;
     }
     char *end = NULL;
+    errno = 0;
     long value = strtol(buf, &end, 10);
-    if (end == buf || (end != NULL && *end != '\0')) {
+    if (errno == ERANGE || end == buf || (end != NULL && *end != '\0')) {
         return THALOVANT_ERR_INVALID;
     }
     *out = value;
@@ -582,7 +599,7 @@ static size_t skip_ws_at(const char *js, size_t len, size_t pos)
 
 int thalovant_json_scan(const char *js, size_t len, size_t pos, thalovant_json_tok *tok)
 {
-    if (js == NULL || tok == NULL) {
+    if (js == NULL || tok == NULL || len > (size_t)INT_MAX) {
         return THALOVANT_ERR_INVALID;
     }
     pos = skip_ws_at(js, len, pos);

@@ -1,0 +1,1 @@
+{"type":"ovos.intent.list.response","data":{"ok":true,"intents":[{"skill_id":"example.skill","intent_name":"example","lang":"en-US","method":"template"}]},"context":{"request_id":"fuzz-request"}}
