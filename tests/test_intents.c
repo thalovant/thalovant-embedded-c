@@ -756,6 +756,20 @@ static void test_field_limits(void)
                  THALOVANT_ERR_NOMEM);
 }
 
+static void test_intent_classification_rejects_malformed_object_suffix(void)
+{
+    /* The expected fields precede malformed suffixes: an early key match
+     * must not turn either object into a valid manifest response. */
+    const char *frames[] = {
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":{\"ok\":true,\"intents\":[]}},}",
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":{\"ok\":true,\"intents\":[]},}}"
+    };
+    for (size_t i = 0; i < sizeof(frames) / sizeof(frames[0]); i++) {
+        thalovant_intent_event event;
+        CHECK_INT_EQ(thalovant_intent_classify(frames[i], strlen(frames[i]), NULL, &event), THALOVANT_ERR_JSON);
+    }
+}
+
 static void test_malformed_manifest_is_refused(void)
 {
     /* A frame whose rows are not comma-separated: the walk stops at the
@@ -836,4 +850,5 @@ void tlv_test_intents(void)
     test_large_manifest_streams();
     test_field_limits();
     test_malformed_manifest_is_refused();
+    test_intent_classification_rejects_malformed_object_suffix();
 }

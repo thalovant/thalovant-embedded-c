@@ -126,6 +126,8 @@ if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
 The following fragments run inside your adapter callbacks. Every concurrently
 active request needs a distinct request ID and its own response state. The
 library classifies the IDs you provide; it does not allocate or reserve them.
+Use a fresh ID for each later logical operation, including after cancellation,
+so delayed remote frames cannot match a new request.
 
 ```c
 /* one query in flight: its id, and whether its reply has been taken.
@@ -178,21 +180,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.5.0`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.5.1`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.5.0
+git -C third_party/thalovant-embedded-c checkout v0.5.1
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.5.0)
+  GIT_TAG        v0.5.1)
 ```
 
 Every GitHub release also carries a reproducible source archive

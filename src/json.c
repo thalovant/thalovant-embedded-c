@@ -696,12 +696,21 @@ int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const
     size_t end = (size_t)obj->end;
     size_t pos = (size_t)obj->start + 1;
     bool first = true;
+    bool found = false;
+    thalovant_json_tok matched;
     for (;;) {
         pos = skip_ws_at(js, end, pos);
         if (pos >= end) {
             return THALOVANT_ERR_JSON;
         }
         if (js[pos] == '}') {
+            if (pos + 1 != end) {
+                return THALOVANT_ERR_JSON;
+            }
+            if (found) {
+                *value = matched;
+                return THALOVANT_OK;
+            }
             return THALOVANT_ERR_MISSING;
         }
         if (!first) {
@@ -731,12 +740,14 @@ int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const
         if (pos >= end || js[pos] != ':') {
             return THALOVANT_ERR_JSON;
         }
-        next = thalovant_json_scan(js, end, pos + 1, value);
+        thalovant_json_tok candidate;
+        next = thalovant_json_scan(js, end, pos + 1, &candidate);
         if (next < 0) {
             return next;
         }
-        if (thalovant_json_str_eq(js, &name, key)) {
-            return THALOVANT_OK;
+        if (!found && thalovant_json_str_eq(js, &name, key)) {
+            matched = candidate;
+            found = true;
         }
         pos = (size_t)next;
     }
