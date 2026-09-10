@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 - 2026-09-09
+
+- Validate every direct object member separator before a shallow key lookup
+  returns a matching value, including malformed suffixes after that value.
+  Preserve first-duplicate-key precedence, bounded memory, and shallow nested
+  container validation. Malformed intent-response objects are now refused.
+- Make legacy examples stop before sealing or publishing failed buffers,
+  document unique active correlation IDs and the unmatched-intent event, and
+  cover slash-only MQTT prefixes.
+
 ## 0.5.0 - 2026-09-09
 
 - Add fallback-handler query builders and reply classification, preserving

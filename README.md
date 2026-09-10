@@ -32,8 +32,8 @@ protocol-specific:
   the preshared-key handshake/hello helpers.
 - **`thalovant_ask`** — builders for `recognizer_loop:utterance` frames with
   request/session correlation, and a classifier for the reply frames
-  (speak / handled / complete_intent_failure / policy denied / query
-  timeout) so you can run the ask loop on your own event loop.
+  (speak / handled / complete_intent_failure / ovos.intent.unmatched /
+  policy denied / query timeout) so you can run the ask loop on your own event loop.
 - **`thalovant_intents`** — the intent inventory: builders for
   `ovos.intent.list` (what the hub can be asked, per language) and
   `ovos.intent.describe` (the sentences behind one intent, `{slot}`
@@ -77,7 +77,9 @@ ephemeral key for every connection. The library adds no socket or broker.
 ## Legacy v2 sketch (MQTT)
 
 The following retained helpers apply only to legacy v2 hubs. Their
-`crypto_key` envelope is incompatible with a v3-only listener.
+`crypto_key` envelope is incompatible with a v3-only listener. Run these
+fragments inside your adapter callbacks, returning before publication whenever
+a builder or codec fails.
 
 ```c
 #include "thalovant/thalovant.h"
@@ -99,14 +101,18 @@ char frame[1024];
 thalovant_ask_request ask = { "what time is it", "en-us",
                               "sess-1", identity.site_id, "req-1" };
 int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
-if (frame_len < 0) { /* THALOVANT_ERR_NOMEM: frame[] too small; send nothing */ }
+if (frame_len < 0) {
+    return; /* frame[] too small or invalid input: send nothing */
+}
 
 uint8_t nonce[16];   /* fill from your RNG — never reuse */
 uint8_t sealed[1100];
 size_t sealed_len;
-thalovant_envelope_encrypt_binary(key, nonce, (uint8_t *)frame,
-                                  (size_t)frame_len, sealed, sizeof(sealed),
-                                  &sealed_len);
+if (thalovant_envelope_encrypt_binary(key, nonce, (uint8_t *)frame,
+                                     (size_t)frame_len, sealed, sizeof(sealed),
+                                     &sealed_len) != THALOVANT_OK) {
+    return; /* sealing failed: never publish an incomplete buffer */
+}
 /* publish sealed on topics.inbound ... */
 
 /* classify replies arriving on topics.outbound */
@@ -116,6 +122,12 @@ if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
 ```
 
 ## What can be said (intent inventory)
+
+The following fragments run inside your adapter callbacks. Every concurrently
+active request needs a distinct request ID and its own response state. The
+library classifies the IDs you provide; it does not allocate or reserve them.
+Use a fresh ID for each later logical operation, including after cancellation,
+so delayed remote frames cannot match a new request.
 
 ```c
 /* one query in flight: its id, and whether its reply has been taken.
@@ -128,7 +140,7 @@ struct inventory_query query = { "req-2", false };   /* both set together */
 thalovant_intent_list_request list = { "en-us", "sess-1", identity.site_id,
                                        query.request_id, false };
 if (thalovant_intent_list_build_frame(&list, frame, sizeof(frame)) < 0) {
-    /* THALOVANT_ERR_NOMEM: frame[] too small; nothing was built to send */
+    return; /* frame[] too small or invalid input: nothing was built to send */
 }
 /* seal and publish as above */
 
@@ -168,21 +180,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.5.0`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.5.1`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.5.0
+git -C third_party/thalovant-embedded-c checkout v0.5.1
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.5.0)
+  GIT_TAG        v0.5.1)
 ```
 
 Every GitHub release also carries a reproducible source archive

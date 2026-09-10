@@ -49,6 +49,14 @@ static void test_prefix_trims_slashes(void)
                  "hivemind/hub-1/tlv-key-123/status");
 }
 
+static void test_prefix_slashes_only(void)
+{
+    thalovant_identity identity = base_identity();
+    thalovant_mqtt_topics topics;
+    strcpy(identity.mqtt.topic_prefix, "///");
+    CHECK_INT_EQ(thalovant_mqtt_topics_derive(&identity, &topics), THALOVANT_ERR_MISSING);
+}
+
 static void test_prefix_trims_whitespace(void)
 {
     thalovant_identity identity = base_identity();
@@ -171,6 +179,7 @@ void tlv_test_topics(void)
 {
     test_prefix_plain();
     test_prefix_trims_slashes();
+    test_prefix_slashes_only();
     test_prefix_trims_whitespace();
     test_prefix_whitespace_only();
     test_prefix_rejects_wildcards();

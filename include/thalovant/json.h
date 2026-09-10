@@ -122,8 +122,10 @@ int thalovant_json_scan(const char *js, size_t len, size_t pos, thalovant_json_t
  * The value of `key` in the object `obj` (a token from thalovant_json_scan
  * or the tokenizer), into `value`. THALOVANT_ERR_MISSING when the key is
  * absent; a JSON null is returned as a primitive, not treated as missing.
+ * All direct members are checked before returning the first matching key.
  * Members must be separated by exactly one comma: a missing, doubled, or
- * trailing comma yields THALOVANT_ERR_JSON.
+ * trailing comma yields THALOVANT_ERR_JSON even after a matching key. Nested
+ * containers retain shallow validation until they are scanned themselves.
  */
 int thalovant_json_scan_key(const char *js, const thalovant_json_tok *obj, const char *key,
                             thalovant_json_tok *value);

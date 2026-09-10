@@ -292,6 +292,26 @@ static void test_scan_syntax_errors(void)
     CHECK_INT_EQ(thalovant_json_scan_key(bare, &tok, "a", &value), THALOVANT_ERR_JSON);
 }
 
+static void test_scan_key_validates_the_direct_object_suffix(void)
+{
+    const char *invalid[] = {
+        "{\"a\":1,}", "{\"a\":1 \"b\":2}", "{\"a\":1,,\"b\":2}",
+        "{\"a\":1,\"b\" 2}", "{\"a\":1,\"b\":tru}"
+    };
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+        thalovant_json_tok object, value;
+        CHECK(thalovant_json_scan(invalid[i], strlen(invalid[i]), 0, &object) > 0);
+        CHECK_INT_EQ(thalovant_json_scan_key(invalid[i], &object, "a", &value), THALOVANT_ERR_JSON);
+    }
+    const char *valid = "{\"a\":1,\"b\":2,\"a\":3}";
+    thalovant_json_tok object, value;
+    long number = 0;
+    CHECK(thalovant_json_scan(valid, strlen(valid), 0, &object) > 0);
+    CHECK_INT_EQ(thalovant_json_scan_key(valid, &object, "a", &value), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_json_as_int(valid, &value, &number), THALOVANT_OK);
+    CHECK_INT_EQ(number, 1); /* first duplicate retains established precedence */
+}
+
 static void test_scan_requires_separators(void)
 {
     /* Bracket balance alone would accept these: the members are only
@@ -303,8 +323,8 @@ static void test_scan_requires_separators(void)
 
     const char *no_comma = "{\"a\":1 \"b\":2}";
     CHECK(thalovant_json_scan(no_comma, strlen(no_comma), 0, &tok) > 0);
-    /* The first key is still readable; the malformed member after it is not. */
-    CHECK_INT_EQ(thalovant_json_scan_key(no_comma, &tok, "a", &value), THALOVANT_OK);
+    /* A matching first key cannot hide a malformed later member. */
+    CHECK_INT_EQ(thalovant_json_scan_key(no_comma, &tok, "a", &value), THALOVANT_ERR_JSON);
     CHECK_INT_EQ(thalovant_json_scan_key(no_comma, &tok, "b", &value), THALOVANT_ERR_JSON);
 
     const char *doubled = "{\"a\":1,,\"b\":2}";
@@ -370,4 +390,5 @@ void tlv_test_json(void)
     test_scan_matches_tokenizer_on_big_arrays();
     test_scan_syntax_errors();
     test_scan_requires_separators();
+    test_scan_key_validates_the_direct_object_suffix();
 }
