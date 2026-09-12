@@ -18,13 +18,13 @@ static int append(char *out, size_t cap, size_t *pos, const char *text)
     return THALOVANT_OK;
 }
 
-static int append_json_string(char *out, size_t cap, size_t *pos, const char *text)
+static int append_json_range(char *out, size_t cap, size_t *pos, const char *text, size_t length)
 {
     int rc = append(out, cap, pos, "\"");
     if (rc != THALOVANT_OK) {
         return rc;
     }
-    for (const char *c = text; *c != '\0'; c++) {
+    for (const char *c = text; (size_t)(c - text) < length; c++) {
         unsigned char ch = (unsigned char)*c;
         char buf[8] = { 0 };
         const char *piece = buf;
@@ -57,11 +57,69 @@ static int append_json_string(char *out, size_t cap, size_t *pos, const char *te
     return append(out, cap, pos, "\"");
 }
 
+static int append_json_string(char *out, size_t cap, size_t *pos, const char *text)
+{
+    return append_json_range(out, cap, pos, text, strlen(text));
+}
+
+static size_t trimmed(const char **text)
+{
+    while (**text != '\0' && isspace((unsigned char)**text)) (*text)++;
+    size_t size = strlen(*text);
+    while (size > 0 && isspace((unsigned char)(*text)[size - 1])) size--;
+    return size;
+}
+
+static int append_pipeline(char *out, size_t cap, size_t *pos, const char *json)
+{
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    int count = thalovant_json_parse(json, strlen(json), tokens, THALOVANT_WIRE_MAX_TOKENS);
+    if (count < 0) return count;
+    bool started = false;
+    for (int i = 1; i < count; i++) {
+        if (tokens[i].type != THALOVANT_JSON_STRING) return THALOVANT_ERR_INVALID;
+        char stage[THALOVANT_ASK_TEXT_MAX];
+        int rc = thalovant_json_unescape(json, &tokens[i], stage, sizeof(stage));
+        if (rc < 0) return rc;
+        const char *value = stage;
+        size_t size = (size_t)rc;
+        while (size > 0 && isspace((unsigned char)*value)) { value++; size--; }
+        while (size > 0 && isspace((unsigned char)value[size - 1])) size--;
+        if (size == 0) continue;
+        rc = append(out, cap, pos, started ? "," : ",\"pipeline\":[");
+        if (rc < 0) return rc;
+        if ((rc = append_json_range(out, cap, pos, value, size)) < 0) return rc;
+        started = true;
+    }
+    return started ? append(out, cap, pos, "]") : THALOVANT_OK;
+}
+
 int thalovant_ask_build_payload(const thalovant_ask_request *request, char *out, size_t cap)
+{
+    return thalovant_ask_build_payload_with_hints(request, NULL, out, cap);
+}
+
+static int validate_hint(const char *json, thalovant_json_type type)
+{
+    if (json == NULL) return THALOVANT_OK;
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    int count = thalovant_json_parse(json, strlen(json), tokens, THALOVANT_WIRE_MAX_TOKENS);
+    if (count < 0) return count;
+    return count > 0 && tokens[0].type == type ? THALOVANT_OK : THALOVANT_ERR_INVALID;
+}
+
+int thalovant_ask_build_payload_with_hints(const thalovant_ask_request *request,
+    const thalovant_ask_hints *hints, char *out, size_t cap)
 {
     if (request == NULL || out == NULL || request->text == NULL || request->text[0] == '\0' ||
         request->session_id == NULL || request->request_id == NULL) {
         return THALOVANT_ERR_INVALID;
+    }
+    if (hints != NULL) {
+        int result = validate_hint(hints->pipeline_json, THALOVANT_JSON_ARRAY);
+        if (result < 0) return result;
+        result = validate_hint(hints->location_json, THALOVANT_JSON_OBJECT);
+        if (result < 0) return result;
     }
     const char *lang = request->lang != NULL ? request->lang : "en-us";
     size_t pos = 0;
@@ -87,14 +145,36 @@ int thalovant_ask_build_payload(const thalovant_ask_request *request, char *out,
     if ((rc = append_json_string(out, cap, &pos, lang)) != THALOVANT_OK) return rc;
     if ((rc = append(out, cap, &pos, ",\"request_id\":")) != THALOVANT_OK) return rc;
     if ((rc = append_json_string(out, cap, &pos, request->request_id)) != THALOVANT_OK) return rc;
-    if ((rc = append(out, cap, &pos, "}}}")) != THALOVANT_OK) return rc;
+    if (hints != NULL && hints->pipeline_json != NULL) {
+        if ((rc = append_pipeline(out, cap, &pos, hints->pipeline_json)) < 0) return rc;
+    }
+    if ((rc = append(out, cap, &pos, "}")) != THALOVANT_OK) return rc;
+    if (hints != NULL && hints->stt_lang != NULL) {
+        const char *hint = hints->stt_lang;
+        size_t size = trimmed(&hint);
+        if (size > 0) {
+            if ((rc = append(out, cap, &pos, ",\"stt_lang\":")) < 0) return rc;
+            if ((rc = append_json_range(out, cap, &pos, hint, size)) < 0) return rc;
+        }
+    }
+    if (hints != NULL && hints->location_json != NULL && strcmp(hints->location_json, "{}") != 0) {
+        if ((rc = append(out, cap, &pos, ",\"location\":")) != THALOVANT_OK) return rc;
+        if ((rc = append(out, cap, &pos, hints->location_json)) != THALOVANT_OK) return rc;
+    }
+    if ((rc = append(out, cap, &pos, "}}")) != THALOVANT_OK) return rc;
     return (int)pos;
 }
 
 int thalovant_ask_build_frame(const thalovant_ask_request *request, char *out, size_t cap)
 {
+    return thalovant_ask_build_frame_with_hints(request, NULL, out, cap);
+}
+
+int thalovant_ask_build_frame_with_hints(const thalovant_ask_request *request,
+    const thalovant_ask_hints *hints, char *out, size_t cap)
+{
     char payload[THALOVANT_ASK_TEXT_MAX + 512];
-    int rc = thalovant_ask_build_payload(request, payload, sizeof(payload));
+    int rc = thalovant_ask_build_payload_with_hints(request, hints, payload, sizeof(payload));
     if (rc < 0) {
         return rc;
     }
@@ -185,6 +265,8 @@ int thalovant_ask_classify(const char *frame_json, size_t len, const char *reque
     if (thalovant_json_str_eq(frame_json, &toks[type], "speak") ||
         thalovant_json_str_eq(frame_json, &toks[type], "ovos.utterance.speak")) {
         kind = THALOVANT_ASK_SPEAK;
+    } else if (thalovant_json_str_eq(frame_json, &toks[type], "mycroft.audio.queue")) {
+        kind = THALOVANT_ASK_AUDIO;
     } else if (thalovant_json_str_eq(frame_json, &toks[type], "ovos.utterance.handled")) {
         kind = THALOVANT_ASK_HANDLED;
     } else if (thalovant_json_str_eq(frame_json, &toks[type], "complete_intent_failure") ||
@@ -266,4 +348,91 @@ int thalovant_ask_normalize_text(char *text)
     }
     text[out] = '\0';
     return (int)out;
+}
+
+
+static int event_tokens(const char *frame, size_t len, const char *request_id,
+    thalovant_json_tok *tokens, thalovant_ask_kind *kind)
+{
+    thalovant_ask_event event;
+    int rc = thalovant_ask_classify(frame, len, request_id, &event);
+    if (rc < 0) return rc;
+    if (event.kind == THALOVANT_ASK_IGNORE) return THALOVANT_ERR_MISSING;
+    *kind = event.kind;
+    return thalovant_json_parse(frame, len, tokens, THALOVANT_WIRE_MAX_TOKENS);
+}
+
+int thalovant_ask_audio_decode(const char *frame, size_t len, const char *request_id,
+    char *scratch, size_t scratch_cap, uint8_t *out, size_t out_cap)
+{
+    if (frame == NULL || scratch == NULL || out == NULL) return THALOVANT_ERR_INVALID;
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, request_id, tokens, &kind);
+    if (count < 0) return count;
+    if (kind != THALOVANT_ASK_AUDIO) return THALOVANT_ERR_MISSING;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
+    int binary = thalovant_json_object_get(frame, tokens, count, data, "binary_data");
+    if (binary < 0 || tokens[binary].type != THALOVANT_JSON_STRING) return THALOVANT_ERR_MISSING;
+    /* JSON escapes can use six source bytes per decoded ASCII character. */
+    if ((size_t)(tokens[binary].end - tokens[binary].start) > THALOVANT_AUDIO_CLIP_MAX * 12u) return THALOVANT_ERR_NOMEM;
+    int encoded = thalovant_json_unescape(frame, &tokens[binary], scratch, scratch_cap);
+    if (encoded < 0) return encoded;
+    if (encoded == 0) return THALOVANT_ERR_MISSING;
+    if ((size_t)encoded > THALOVANT_AUDIO_CLIP_MAX * 2u) return THALOVANT_ERR_NOMEM;
+    size_t written = 0;
+    int high = -1;
+    for (int i = 0; i < encoded; i++) {
+        unsigned char c = (unsigned char)scratch[i];
+        if (c == 32 || (c >= 9 && c <= 13)) {
+            if (high >= 0) return THALOVANT_ERR_INVALID;
+            continue;
+        }
+        int value = c >= '0' && c <= '9' ? c - '0' :
+            c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        if (value < 0) return THALOVANT_ERR_INVALID;
+        if (high < 0) high = value;
+        else {
+            if (written >= out_cap) return THALOVANT_ERR_NOMEM;
+            out[written++] = (uint8_t)(high * 16 + value); high = -1;
+        }
+    }
+    return high >= 0 ? THALOVANT_ERR_INVALID : (int)written;
+}
+
+int thalovant_ask_event_language(const char *frame, size_t len, const char *request_id, char *out, size_t cap)
+{
+    if (frame == NULL || out == NULL || cap == 0) return THALOVANT_ERR_INVALID;
+    out[0] = '\0';
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, request_id, tokens, &kind);
+    if (count < 0) return count;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
+    int context = thalovant_json_object_get(frame, tokens, count, payload, "context");
+    int session = thalovant_json_object_get(frame, tokens, count, context, "session");
+    const int objects[] = { data, context, session };
+    for (size_t i = 0; i < 3; i++) {
+        int value = thalovant_json_object_get(frame, tokens, count, objects[i], "lang");
+        if (value >= 0 && tokens[value].type == THALOVANT_JSON_STRING) {
+            int rc = thalovant_json_unescape(frame, &tokens[value], out, cap);
+            if (rc != 0) return rc;
+        }
+    }
+    return 0;
+}
+
+bool thalovant_audio_budget_accept(thalovant_audio_budget *budget, size_t encoded_chars)
+{
+    if (budget == NULL) return false;
+    if (encoded_chars > THALOVANT_AUDIO_CLIP_MAX * 2u ||
+        budget->encoded_chars > THALOVANT_REPLY_MEDIA_MAX * 2u ||
+        encoded_chars > THALOVANT_REPLY_MEDIA_MAX * 2u - budget->encoded_chars) {
+        if (budget->dropped < SIZE_MAX) budget->dropped++;
+        return false;
+    }
+    budget->encoded_chars += encoded_chars;
+    return true;
 }

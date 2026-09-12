@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — 2026-09-12
+
+- Add allocation-free request language/pipeline/location hints, location JSON construction, speakable intent patterns, audio event classification and bounded embedded audio decoding.
+- Expose reply media budgets and event language extraction while preserving existing request wire bytes and transport-agnostic integration.
+
 ## 0.5.1 - 2026-09-09
 
 - Validate every direct object member separator before a shallow key lookup

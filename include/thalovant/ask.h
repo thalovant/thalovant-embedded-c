@@ -30,6 +30,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "thalovant/config.h"
 #include "thalovant/error.h"
@@ -55,6 +56,7 @@ typedef enum {
     THALOVANT_ASK_INTENT_FAILURE, /* "complete_intent_failure" / "ovos.intent.unmatched" */
     THALOVANT_ASK_POLICY_DENIED,  /* "hive.policy.denied" */
     THALOVANT_ASK_QUERY_TIMEOUT,  /* "hive.query.timeout" */
+    THALOVANT_ASK_AUDIO,          /* "mycroft.audio.queue": collect without settling */
 } thalovant_ask_kind;
 
 typedef struct {
@@ -81,5 +83,33 @@ int thalovant_ask_classify(const char *frame_json, size_t len, const char *reque
  * length.
  */
 int thalovant_ask_normalize_text(char *text);
+
+/* Optional request hints. JSON values must be a pipeline array and location object.
+ * Existing request/frame builders retain their exact wire shape. */
+typedef struct {
+    const char *stt_lang;
+    const char *pipeline_json;
+    const char *location_json;
+} thalovant_ask_hints;
+int thalovant_ask_build_payload_with_hints(const thalovant_ask_request *request,
+    const thalovant_ask_hints *hints, char *out, size_t cap);
+int thalovant_ask_build_frame_with_hints(const thalovant_ask_request *request,
+    const thalovant_ask_hints *hints, char *out, size_t cap);
+
+#define THALOVANT_AUDIO_CLIP_MAX (4u * 1024u * 1024u)
+#define THALOVANT_REPLY_MEDIA_MAX (16u * 1024u * 1024u)
+/* Decode only embedded hexadecimal bytes. Scratch holds the JSON-unescaped
+ * encoded string; output holds the decoded clip. No paths or URLs are fetched.
+ * Returns decoded byte count, ERR_MISSING for non-audio/missing/correlation miss,
+ * ERR_INVALID for malformed hex, ERR_NOMEM for clip or caller-buffer limits. */
+int thalovant_ask_audio_decode(const char *frame, size_t len, const char *request_id,
+    char *scratch, size_t scratch_cap, uint8_t *out, size_t out_cap);
+/* Returns the first nonempty data.lang/context.lang/context.session.lang. */
+int thalovant_ask_event_language(const char *frame, size_t len, const char *request_id,
+    char *out, size_t cap);
+/* Call before retaining a clip. Zero-initialize once per reply. Drop does not
+ * settle a reply. Integrators deduplicate their own transport deliveries. */
+typedef struct { size_t encoded_chars; size_t dropped; } thalovant_audio_budget;
+bool thalovant_audio_budget_accept(thalovant_audio_budget *budget, size_t encoded_chars);
 
 #endif /* THALOVANT_ASK_H */

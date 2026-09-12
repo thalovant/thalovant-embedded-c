@@ -13,6 +13,7 @@ void tlv_test_topics(void);
 void tlv_test_wire(void);
 void tlv_test_ask(void);
 void tlv_test_intents(void);
+void tlv_test_request_helpers(void);
 
 int main(void)
 {
@@ -26,6 +27,7 @@ int main(void)
     tlv_test_wire();
     tlv_test_ask();
     tlv_test_intents();
+    tlv_test_request_helpers();
     printf("%d checks, %d failures\n", tlv_test_checks, tlv_test_failures);
     return tlv_test_failures == 0 ? 0 : 1;
 }

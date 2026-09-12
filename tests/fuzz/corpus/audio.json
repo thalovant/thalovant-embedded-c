@@ -1,0 +1,1 @@
+{"msg_type":"bus","payload":{"type":"mycroft.audio.queue","data":{"binary_data":"00 ff\n10","lang":"fr"},"context":{"request_id":"fuzz-request"}}}
