@@ -6,6 +6,7 @@
 #include "thalovant/noise.h"
 #include "thalovant/aes_gcm.h"
 #include "thalovant/ask.h"
+#include "thalovant/request_helpers.h"
 #include "thalovant/codec.h"
 #include "thalovant/config.h"
 #include "thalovant/error.h"

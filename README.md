@@ -180,21 +180,21 @@ Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
 ## Getting a release
 
 Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.5.1`) — as a git submodule, via CMake `FetchContent`, as an
+(current: `v0.6.0`) — as a git submodule, via CMake `FetchContent`, as an
 ESP-IDF component ref, or in a Zephyr west manifest:
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.5.1
+git -C third_party/thalovant-embedded-c checkout v0.6.0
 ```
 
 ```cmake
 # CMake FetchContent
 FetchContent_Declare(thalovant
   GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.5.1)
+  GIT_TAG        v0.6.0)
 ```
 
 Every GitHub release also carries a reproducible source archive
@@ -244,6 +244,41 @@ The CI fuzz target mutates JSON, identity, wire, ask, intent and codec inputs,
 including short output buffers, under fatal address and undefined-behavior
 sanitizers. Reproduce with `make fuzz FUZZ_SECONDS=120`. Inputs and crash
 artifacts stay under `build/`; the core library gains no dependency.
+
+## Request hints, examples, and embedded skill audio
+
+`thalovant_ask_build_payload_with_hints` and `thalovant_ask_build_frame_with_hints`
+accept `thalovant_ask_hints`: `stt_lang`, a JSON string array `pipeline_json`,
+and a JSON object `location_json`. Language and pipeline stages are trimmed;
+empty stages are omitted. Build the location object with
+`thalovant_build_location`; a city is required and invalid/zero coordinates are
+omitted. Existing builders retain their original wire bytes.
+
+The complete frame uses the caller's output buffer directly. Each decoded
+pipeline stage must fit `THALOVANT_ASK_TEXT_MAX` including its terminator;
+hint JSON must fit `THALOVANT_WIRE_MAX_TOKENS`. These compile-time limits keep
+the tokenizer and normalization buffers bounded without dynamic allocation.
+
+`thalovant_speakable` renders an intent pattern into a caller-owned buffer with
+optional `thalovant_speakable_slot` replacements. Rank rendered examples using
+the original pattern's slot presence, retain the best rank when deduplicating,
+and apply the requested limit afterward.
+
+`thalovant_ask_classify` recognizes `THALOVANT_ASK_AUDIO` without marking it a
+failure. Audio never settles or extends an ask: retain its order alongside speech
+within the existing reply window. `thalovant_ask_event_language` returns the
+first nonempty language from event data, context, or session.
+`thalovant_ask_audio_decode` validates correlation and decodes only embedded
+hexadecimal audio into caller-owned storage; scratch space holds the unescaped
+hex string. It never reads a file or URL. Check its returned length/error before
+playing bytes. Buffer limits may be smaller than the 4 MiB clip maximum.
+
+Zero-initialize `thalovant_audio_budget` for each reply and call
+`thalovant_audio_budget_accept` before retaining encoded audio. It caps each
+clip at 4 MiB and all reply clips at 16 MiB (encoded upper bounds); rejected
+clips increment `dropped` and do not affect speech collection. Deduplicate
+transport deliveries before collection. The library remains transport-agnostic;
+control-plane skill/configuration management belongs to managed SDK clients.
 
 ## License
 
