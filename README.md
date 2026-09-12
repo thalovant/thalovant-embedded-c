@@ -254,6 +254,11 @@ empty stages are omitted. Build the location object with
 `thalovant_build_location`; a city is required and invalid/zero coordinates are
 omitted. Existing builders retain their original wire bytes.
 
+The complete frame uses the caller's output buffer directly. Each decoded
+pipeline stage must fit `THALOVANT_ASK_TEXT_MAX` including its terminator;
+hint JSON must fit `THALOVANT_WIRE_MAX_TOKENS`. These compile-time limits keep
+the tokenizer and normalization buffers bounded without dynamic allocation.
+
 `thalovant_speakable` renders an intent pattern into a caller-owned buffer with
 optional `thalovant_speakable_slot` replacements. Rank rendered examples using
 the original pattern's slot presence, retain the best rank when deduplicating,

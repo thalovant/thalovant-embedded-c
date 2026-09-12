@@ -173,13 +173,17 @@ int thalovant_ask_build_frame(const thalovant_ask_request *request, char *out, s
 int thalovant_ask_build_frame_with_hints(const thalovant_ask_request *request,
     const thalovant_ask_hints *hints, char *out, size_t cap)
 {
-    char payload[THALOVANT_ASK_TEXT_MAX + 512];
-    int rc = thalovant_ask_build_payload_with_hints(request, hints, payload, sizeof(payload));
-    if (rc < 0) {
-        return rc;
-    }
-    thalovant_hive_message msg = { "bus", payload, NULL, NULL, NULL, NULL, NULL, NULL };
-    return thalovant_wire_serialize(&msg, out, cap);
+    if (out == NULL || cap == 0) return THALOVANT_ERR_INVALID;
+    /* Serialize the default bus envelope directly around the caller-buffer
+     * payload. Existing Node wire fixtures cover the field order and defaults. */
+    size_t pos = 0;
+    int rc = append(out, cap, &pos, "{\"msg_type\":\"bus\",\"payload\":");
+    if (rc < 0) return rc;
+    rc = thalovant_ask_build_payload_with_hints(request, hints, out + pos, cap - pos);
+    if (rc < 0) return rc;
+    pos += (size_t)rc;
+    rc = append(out, cap, &pos, ",\"metadata\":{},\"route\":[],\"node\":null,\"target_site_id\":null,\"target_pubkey\":null,\"source_peer\":null}");
+    return rc < 0 ? rc : (int)pos;
 }
 
 /* request_id ?? thalovant_request_id ?? correlation_id from one object. */

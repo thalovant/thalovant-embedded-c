@@ -44,6 +44,25 @@ static void location_and_hints(void)
     CHECK(thalovant_build_location(&location,place,sizeof(place)) > 0);CHECK(strstr(place,"coordinate") == NULL);
     location.city=" ";CHECK_INT_EQ(thalovant_build_location(&location,place,sizeof(place)),0);
 }
+static void large_location_hint(void)
+{
+    char location[2400], payload[3000], expected[3400], output[3400];
+    const char *prefix = "{\"city\":\"";
+    size_t pos = strlen(prefix);
+    memcpy(location, prefix, pos);
+    memset(location + pos, 'a', 2200); pos += 2200;
+    memcpy(location + pos, "\"}", 3);
+    thalovant_ask_request request = {"weather", NULL, "s", NULL, "r"};
+    thalovant_ask_hints hints = {NULL, NULL, location};
+    CHECK(thalovant_ask_build_payload_with_hints(&request, &hints, payload, sizeof(payload)) > 0);
+    thalovant_hive_message message = {"bus", payload, NULL, NULL, NULL, NULL, NULL, NULL};
+    int expected_len = thalovant_wire_serialize(&message, expected, sizeof(expected));
+    CHECK(expected_len > 0);
+    CHECK_INT_EQ(thalovant_ask_build_frame_with_hints(&request, &hints, output, sizeof(output)), expected_len);
+    CHECK_STR_EQ(output, expected);
+    CHECK_INT_EQ(thalovant_ask_build_frame_with_hints(&request, &hints, output, (size_t)expected_len + 1), expected_len);
+    CHECK_INT_EQ(thalovant_ask_build_frame_with_hints(&request, &hints, output, (size_t)expected_len), THALOVANT_ERR_NOMEM);
+}
 static void audio(void)
 {
     const char *frame="{\"msg_type\":\"bus\",\"payload\":{\"type\":\"mycroft.audio.queue\",\"data\":{\"binary_data\":\"00 ff\\n10\",\"lang\":\"fr\"},\"context\":{\"request_id\":\"r\",\"lang\":\"en\"}}}";
@@ -66,4 +85,4 @@ static void audio(void)
     budget.dropped = SIZE_MAX;
     CHECK(!thalovant_audio_budget_accept(&budget,SIZE_MAX));CHECK(budget.dropped == SIZE_MAX);
 }
-void tlv_test_request_helpers(void) { patterns();location_and_hints();audio(); }
+void tlv_test_request_helpers(void) { patterns();location_and_hints();large_location_hint();audio(); }

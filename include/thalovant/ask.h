@@ -85,6 +85,9 @@ int thalovant_ask_classify(const char *frame_json, size_t len, const char *reque
 int thalovant_ask_normalize_text(char *text);
 
 /* Optional request hints. JSON values must be a pipeline array and location object.
+ * Each decoded pipeline stage must fit THALOVANT_ASK_TEXT_MAX including its NUL
+ * terminator. Hint JSON must fit THALOVANT_WIRE_MAX_TOKENS. The complete frame is
+ * bounded by the caller's output buffer, with no intermediate payload-size cap.
  * Existing request/frame builders retain their exact wire shape. */
 typedef struct {
     const char *stt_lang;

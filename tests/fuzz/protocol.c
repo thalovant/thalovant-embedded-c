@@ -53,6 +53,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     (void)thalovant_speakable(pattern, NULL, 0, text, cap);
     thalovant_location location = {pattern, NULL, NULL, NULL, false, 0, 0};
     (void)thalovant_build_location(&location, text, cap);
+    thalovant_ask_request request = {"fuzz", NULL, "session", NULL, "request"};
+    thalovant_ask_hints hints = {NULL, pattern, NULL};
+    (void)thalovant_ask_build_frame_with_hints(&request, &hints, text, cap);
     (void)thalovant_intent_classify(json, size, "fuzz-request", &intents);
     (void)thalovant_hex_decode(json, size, bytes, cap);
     (void)thalovant_base64_decode(json, size, bytes, cap);
