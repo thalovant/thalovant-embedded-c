@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1 — 2026-09-13
+
+- Add caller-buffer pipeline/skill stamp extraction and a reply-claim classifier; retain caller ownership of ordered ID storage. Reject embedded NUL and undersized buffers.
+
 ## 0.6.0 — 2026-09-12
 
 - Add allocation-free request language/pipeline/location hints, location JSON construction, speakable intent patterns, audio event classification and bounded embedded audio decoding.

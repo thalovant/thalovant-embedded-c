@@ -39,7 +39,7 @@ $(BUILD)/%.o: src/%.c $(HDRS) | $(BUILD)
 $(LIB): $(OBJS)
 	$(AR) rcs $@ $^
 
-$(TEST_BIN): $(TEST_SRCS) tests/harness.h $(wildcard tests/fixtures/*.h) $(LIB)
+$(TEST_BIN): $(TEST_SRCS) $(wildcard tests/*.h) $(wildcard tests/fixtures/*.h) $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(TEST_SRCS) $(LIB) -o $@
 
 $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)

@@ -5,6 +5,7 @@
  */
 #include "harness.h"
 #include "thalovant/ask.h"
+#include "reply_claim_vectors.h"
 
 static const char ASK_FRAME_FIXTURE[] =
     "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"recognizer_loop:utterance\",\"data\":"
@@ -153,8 +154,36 @@ static void test_normalize_text(void)
     CHECK_STR_EQ(empty, "");
 }
 
+static void test_reply_claims(void)
+{
+    for (size_t i = 0; i < sizeof(REPLY_CLAIM_VECTORS) / sizeof(REPLY_CLAIM_VECTORS[0]); ++i) {
+        const reply_claim_vector *v = &REPLY_CLAIM_VECTORS[i];
+        CHECK(thalovant_reply_claimed(v->handled, v->failed, v->stages, v->count) == v->claimed);
+    }
+    CHECK(!thalovant_reply_claimed(true, false, NULL, 1));
+    CHECK(thalovant_reply_claimed(true, false, NULL, 0));
+    char out[64];
+    const char *frame = "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\"},\"context\":{\"request_id\":\"r\",\"pipeline_id\":\"ovos-fallback-pipeline-plugin\",\"skill_id\":\"weather.skill\"}}}";
+    CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "r", out, sizeof(out)), 29);
+    CHECK_STR_EQ(out, "ovos-fallback-pipeline-plugin");
+    CHECK_INT_EQ(thalovant_ask_event_skill_id(frame, strlen(frame), "r", out, sizeof(out)), 13);
+    CHECK_STR_EQ(out, "weather.skill");
+    CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "other", out, sizeof(out)), THALOVANT_ERR_MISSING);
+    CHECK_STR_EQ(out, "");
+    CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "r", out, 2), THALOVANT_ERR_NOMEM);
+    CHECK_STR_EQ(out, "");
+    CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "r", NULL, 4), THALOVANT_ERR_INVALID);
+    { const char *bad = "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{},\"context\":{\"pipeline_id\":[]}}}";
+      CHECK_INT_EQ(thalovant_ask_event_pipeline_id(bad, strlen(bad), NULL, out, sizeof(out)), THALOVANT_ERR_MISSING); CHECK_STR_EQ(out, ""); }
+    { const char *bad = "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{},\"context\":{\"pipeline_id\":\"\"}}}";
+      CHECK_INT_EQ(thalovant_ask_event_pipeline_id(bad, strlen(bad), NULL, out, sizeof(out)), THALOVANT_ERR_MISSING); CHECK_STR_EQ(out, ""); }
+    { const char *bad = "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{},\"context\":{\"pipeline_id\":\"a\\u0000fallback\"}}}";
+      CHECK_INT_EQ(thalovant_ask_event_pipeline_id(bad, strlen(bad), NULL, out, sizeof(out)), THALOVANT_ERR_INVALID); CHECK_STR_EQ(out, ""); }
+}
+
 void tlv_test_ask(void)
 {
+    test_reply_claims();
     test_build_frame_matches_node();
     test_build_payload_escaping_and_defaults();
     test_classify_speak();
