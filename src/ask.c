@@ -440,3 +440,49 @@ bool thalovant_audio_budget_accept(thalovant_audio_budget *budget, size_t encode
     budget->encoded_chars += encoded_chars;
     return true;
 }
+
+static int event_context_identifier(const char *frame, size_t len, const char *request_id,
+    const char *field, char *out, size_t cap)
+{
+    if (frame == NULL || out == NULL || cap == 0) return THALOVANT_ERR_INVALID;
+    out[0] = '\0';
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, request_id, tokens, &kind);
+    if (count < 0) return count;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int context = thalovant_json_object_get(frame, tokens, count, payload, "context");
+    int value = thalovant_json_object_get(frame, tokens, count, context, field);
+    if (value < 0 || tokens[value].type != THALOVANT_JSON_STRING) return THALOVANT_ERR_MISSING;
+    int length = thalovant_json_unescape(frame, &tokens[value], out, cap);
+    if (length < 0) { out[0] = '\0'; return length; }
+    if (length == 0) return THALOVANT_ERR_MISSING;
+    if (strlen(out) != (size_t)length) { out[0] = '\0'; return THALOVANT_ERR_INVALID; }
+    return length;
+}
+
+int thalovant_ask_event_pipeline_id(const char *frame, size_t len, const char *request_id,
+    char *out, size_t cap)
+{
+    return event_context_identifier(frame, len, request_id, "pipeline_id", out, cap);
+}
+
+int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *request_id,
+    char *out, size_t cap)
+{
+    return event_context_identifier(frame, len, request_id, "skill_id", out, cap);
+}
+
+bool thalovant_reply_claimed(bool handled, bool has_failure,
+    const char *const *pipeline_ids, size_t pipeline_count)
+{
+    bool stamped = false;
+    if (!handled || has_failure || (pipeline_ids == NULL && pipeline_count != 0)) return false;
+    for (size_t i = 0; i < pipeline_count; ++i) {
+        const char *stage = pipeline_ids[i];
+        if (stage == NULL || stage[0] == '\0') continue;
+        stamped = true;
+        if (strstr(stage, "fallback") == NULL) return true;
+    }
+    return !stamped;
+}

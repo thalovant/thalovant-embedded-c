@@ -110,6 +110,21 @@ int thalovant_ask_audio_decode(const char *frame, size_t len, const char *reques
 /* Returns the first nonempty data.lang/context.lang/context.session.lang. */
 int thalovant_ask_event_language(const char *frame, size_t len, const char *request_id,
     char *out, size_t cap);
+/* Copy a nonempty string stamp from a recognized, correlated reply event.
+ * Returns decoded length, ERR_MISSING for absent/non-string stamps or unrelated
+ * frames, ERR_INVALID for embedded NUL, and ERR_NOMEM for insufficient space.
+ * Callers retain distinct IDs in first-seen order using their own storage. */
+int thalovant_ask_event_pipeline_id(const char *frame, size_t len, const char *request_id,
+    char *out, size_t cap);
+int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *request_id,
+    char *out, size_t cap);
+/* Advisory reply claim: false for failed/unhandled or fallback-only replies;
+ * true for successful replies with a non-fallback stage or no nonempty stamps.
+ * NULL/empty entries are ignored. A NULL array with nonzero count fails closed.
+ * IDs and array storage remain caller-owned; this is not origin verification. */
+bool thalovant_reply_claimed(bool handled, bool has_failure,
+    const char *const *pipeline_ids, size_t pipeline_count);
+
 /* Call before retaining a clip. Zero-initialize once per reply. Drop does not
  * settle a reply. Integrators deduplicate their own transport deliveries. */
 typedef struct { size_t encoded_chars; size_t dropped; } thalovant_audio_budget;
