@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "reference_digests": [
+    "1133ac83dca463a5b7c69c980d1b5db46a1314d08151b31508982ad1cf41b6c6",
+    "c13f62bf0c5ff9a8b06808542f89481f961e7c4e24af13928055598b76e2550c"
+  ],
+  "capabilities": {
+    "runtime": {
+      "status": "required",
+      "reason": "Applicable public behavior is implemented and exercised by the named regression suites and shared fixtures.",
+      "implementation": {
+        "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0",
+        "src/ask.c": "eecb8e1070a0e07dafc316945d696b6a886ef355b03acbd074c2f21f95136d46",
+        "src/noise.c": "207e403b46ac3d5d4388cb1331778b8b2f4cc04033cc0dcbfe60bb69d058f7b8",
+        "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
+        "include/thalovant/thalovant.h": "c5b83dd73f6c8caa18870d76e9fbefacee61025d236ed22da4b206fd4f25a6d7"
+      },
+      "tests": {
+        "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e",
+        "tests/test_ask.c": "ed8d61d4ee1a4d30d926cd6ceba112c06747500e9e6927aca4341f1eed0ff1c5",
+        "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
+        "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f"
+      }
+    },
+    "control": {
+      "status": "not-applicable",
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client."
+    },
+    "identity": {
+      "status": "not-applicable",
+      "reason": "Caller owns credential storage; C consumes supplied keys and credentials."
+    },
+    "listing": {
+      "status": "not-applicable",
+      "reason": "C does not bundle the managed locale renderer or Unicode language tables."
+    },
+    "inventory": {
+      "status": "not-applicable",
+      "reason": "C has no managed inventory object model or filesystem cache; callers own parsing and storage."
+    },
+    "session": {
+      "status": "not-applicable",
+      "reason": "Caller owns network connections, scheduling and callback lifetime; C does not manage hub sessions."
+    },
+    "cli": {
+      "status": "not-applicable",
+      "reason": "Python command line entry point; consumers expose idiomatic language APIs or MCP tools."
+    }
+  }
+}
