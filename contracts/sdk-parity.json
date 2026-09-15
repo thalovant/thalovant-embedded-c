@@ -20,10 +20,6 @@
       "reason": "C does not bundle the managed locale renderer or Unicode language tables.",
       "status": "not-applicable"
     },
-    "native_auth": {
-      "reason": "A caller-buffer wire library with no HTTP client and no browser to open. The device grant is the input-constrained path and this is the device it was written for; there is no control-plane client here to hang a token exchange on.",
-      "status": "not-applicable"
-    },
     "runtime": {
       "implementation": {
         "include/thalovant/ask.h": "735d783b8d1eb5e00470fbad94eecfbe8b327572be5338d249f09a17109fe65c",
