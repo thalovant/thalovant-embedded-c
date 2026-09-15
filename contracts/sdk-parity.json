@@ -1,56 +1,62 @@
 {
-  "schema_version": 1,
+  "capabilities": {
+    "cli": {
+      "reason": "Python command line entry point; consumers expose idiomatic language APIs or MCP tools.",
+      "status": "not-applicable"
+    },
+    "control": {
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client.",
+      "status": "not-applicable"
+    },
+    "identity": {
+      "reason": "Caller owns credential storage; C consumes supplied keys and credentials.",
+      "status": "not-applicable"
+    },
+    "inventory": {
+      "reason": "C has no managed inventory object model or filesystem cache; callers own parsing and storage.",
+      "status": "not-applicable"
+    },
+    "listing": {
+      "reason": "C does not bundle the managed locale renderer or Unicode language tables.",
+      "status": "not-applicable"
+    },
+    "native_auth": {
+      "reason": "A caller-buffer wire library with no HTTP client and no browser to open. The device grant is the input-constrained path and this is the device it was written for; there is no control-plane client here to hang a token exchange on.",
+      "status": "not-applicable"
+    },
+    "runtime": {
+      "implementation": {
+        "include/thalovant/ask.h": "735d783b8d1eb5e00470fbad94eecfbe8b327572be5338d249f09a17109fe65c",
+        "include/thalovant/thalovant.h": "c5b83dd73f6c8caa18870d76e9fbefacee61025d236ed22da4b206fd4f25a6d7",
+        "src/ask.c": "59889409665a3af4e9e149be4523753852eb2e4246493a227b393f28f590d02b",
+        "src/noise.c": "207e403b46ac3d5d4388cb1331778b8b2f4cc04033cc0dcbfe60bb69d058f7b8",
+        "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
+        "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0"
+      },
+      "reason": "Applicable public behavior is implemented and exercised by the named regression suites and shared fixtures. HiveMind #251/#252 only changes the Python upstream client dispatcher; this consumer uses native single-dispatch transports (MCP delegates to the Node SDK), or caller-owned frame parsing in embedded C. No Python HiveMind bus dependency or slave-protocol reinjection exists here. Python now requires fixed upstream 1.1.9a1 and removes its identity-based suppression; equal independent native frames remain distinct. Reply claim metadata follows the Python string-ID contract, with first-seen ordering, case-sensitive fallback stages and legacy unstamped success. Invalid non-string stamps are ignored. Embedded C exposes bounded extraction and claim classification while its caller retains ordered IDs.",
+      "status": "required",
+      "tests": {
+        "tests/reply_claim_vectors.h": "818087fd1e69a31b461a3f38f620b2f0261b26d43ab2e09f0283702c5bc67903",
+        "tests/test_ask.c": "40abbe62d046ceced7d378e9b2782e13ffaf062841ea763d10ded03a8b4087d0",
+        "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
+        "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f",
+        "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e"
+      }
+    },
+    "session": {
+      "reason": "Caller owns network connections, scheduling and callback lifetime; C does not manage hub sessions.",
+      "status": "not-applicable"
+    }
+  },
   "reference_digests": [
     "1133ac83dca463a5b7c69c980d1b5db46a1314d08151b31508982ad1cf41b6c6",
     "c13f62bf0c5ff9a8b06808542f89481f961e7c4e24af13928055598b76e2550c",
     "2440dd10059c468ca5012a3e4e9e057c9bd2df7ef442eba1d5dcdeb4afb3eafd",
     "4f17f2e999105c5629defd1c1ea71a197ecf725a9b559ff7b3bf9932638645bd",
     "676e935e66330f8614d6c23cccddd48e1c4577c3af761775f18e1ea0128b8007",
-    "8b71292c815a4b7219be7b1a7a5d01e9500faaa23e7c97c6a48683fc0411e1d0"
+    "8b71292c815a4b7219be7b1a7a5d01e9500faaa23e7c97c6a48683fc0411e1d0",
+    "e1a17c218e70eb278e4a06161314076269c6d7f3fd24afc522711e1eedb2c2e8",
+    "c1b37fdf37eba918c14fcbd234d02a4c80ffd6a72a55c3db5566cd8ed59e7a5b"
   ],
-  "capabilities": {
-    "runtime": {
-      "status": "required",
-      "reason": "Applicable public behavior is implemented and exercised by the named regression suites and shared fixtures. HiveMind #251/#252 only changes the Python upstream client dispatcher; this consumer uses native single-dispatch transports (MCP delegates to the Node SDK), or caller-owned frame parsing in embedded C. No Python HiveMind bus dependency or slave-protocol reinjection exists here. Python now requires fixed upstream 1.1.9a1 and removes its identity-based suppression; equal independent native frames remain distinct. Reply claim metadata follows the Python string-ID contract, with first-seen ordering, case-sensitive fallback stages and legacy unstamped success. Invalid non-string stamps are ignored. Embedded C exposes bounded extraction and claim classification while its caller retains ordered IDs.",
-      "implementation": {
-        "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0",
-        "src/ask.c": "59889409665a3af4e9e149be4523753852eb2e4246493a227b393f28f590d02b",
-        "src/noise.c": "207e403b46ac3d5d4388cb1331778b8b2f4cc04033cc0dcbfe60bb69d058f7b8",
-        "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
-        "include/thalovant/thalovant.h": "c5b83dd73f6c8caa18870d76e9fbefacee61025d236ed22da4b206fd4f25a6d7",
-        "include/thalovant/ask.h": "735d783b8d1eb5e00470fbad94eecfbe8b327572be5338d249f09a17109fe65c"
-      },
-      "tests": {
-        "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e",
-        "tests/test_ask.c": "40abbe62d046ceced7d378e9b2782e13ffaf062841ea763d10ded03a8b4087d0",
-        "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
-        "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f",
-        "tests/reply_claim_vectors.h": "818087fd1e69a31b461a3f38f620b2f0261b26d43ab2e09f0283702c5bc67903"
-      }
-    },
-    "control": {
-      "status": "not-applicable",
-      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client."
-    },
-    "identity": {
-      "status": "not-applicable",
-      "reason": "Caller owns credential storage; C consumes supplied keys and credentials."
-    },
-    "listing": {
-      "status": "not-applicable",
-      "reason": "C does not bundle the managed locale renderer or Unicode language tables."
-    },
-    "inventory": {
-      "status": "not-applicable",
-      "reason": "C has no managed inventory object model or filesystem cache; callers own parsing and storage."
-    },
-    "session": {
-      "status": "not-applicable",
-      "reason": "Caller owns network connections, scheduling and callback lifetime; C does not manage hub sessions."
-    },
-    "cli": {
-      "status": "not-applicable",
-      "reason": "Python command line entry point; consumers expose idiomatic language APIs or MCP tools."
-    }
-  }
+  "schema_version": 1
 }
