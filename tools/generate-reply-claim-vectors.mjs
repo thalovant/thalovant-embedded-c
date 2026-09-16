@@ -22,6 +22,22 @@ const stages = (row) => {
   return ids;
 };
 
+// What this derives from `contexts` has to match what the shared file says it
+// should be. Without this the header could be generated from a reading of the
+// contexts that disagrees with `expected.pipeline_ids`, and nothing downstream
+// would notice: the C test reads only `claimed`.
+for (const row of vectors.cases) {
+  const derived = stages(row);
+  const expected = row.expected.pipeline_ids ?? [];
+  if (JSON.stringify(derived) !== JSON.stringify(expected)) {
+    console.error(
+      `${row.name}: derived pipeline ids ${JSON.stringify(derived)} do not match ` +
+        `expected ${JSON.stringify(expected)}`,
+    );
+    process.exit(1);
+  }
+}
+
 const widest = Math.max(4, ...vectors.cases.map((row) => stages(row).length));
 const lines = vectors.cases.map((row) => {
   const ids = stages(row);
