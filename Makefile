@@ -26,7 +26,7 @@ OVERFLOW_BIN := $(BUILD)/thalovant-topics-overflow-tests
 TEST_SRCS := $(filter-out $(OVERFLOW_SRC),$(wildcard tests/*.c))
 TEST_BIN  := $(BUILD)/thalovant-tests
 
-.PHONY: all test fuzz clean
+.PHONY: all test vectors fuzz clean
 
 all: $(LIB)
 
@@ -45,7 +45,26 @@ $(TEST_BIN): $(TEST_SRCS) $(wildcard tests/*.h) $(wildcard tests/fixtures/*.h) $
 $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(OVERFLOW_SRC) -o $@
 
-test: $(TEST_BIN) $(OVERFLOW_BIN)
+# The shared vectors reach C as a generated header -- there is no JSON parser
+# here to read them at runtime -- so the generator has to be the only author of
+# it. Transcribed by hand, a changed expectation upstream had nothing here to
+# notice it.
+# Skipped, with a word, when there is no node: README promises this project
+# needs only a C99 compiler, and making `make test` fail without node would
+# have made that untrue. CI runs `make vectors` explicitly, where node is
+# provisioned and a drifted header must fail the build.
+vectors:
+	@if command -v node >/dev/null 2>&1; then \
+		node tools/generate-reply-claim-vectors.mjs --check; \
+	else \
+		echo "vectors: node not found; skipping the generated-header check (see 'make vectors-strict')"; \
+	fi
+
+# What CI runs: no node is a failure here, not a skip.
+vectors-strict:
+	node tools/generate-reply-claim-vectors.mjs --check
+
+test: $(TEST_BIN) $(OVERFLOW_BIN) vectors
 	./$(TEST_BIN)
 	./$(OVERFLOW_BIN)
 
