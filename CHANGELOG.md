@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 - 2026-09-16
+
+- Automated patch release of the unreleased changes on `main` since v0.6.1.
+
 ## 0.6.1 — 2026-09-13
 
 - Add caller-buffer pipeline/skill stamp extraction and a reply-claim classifier; retain caller ownership of ordered ID storage. Reject embedded NUL and undersized buffers.
