@@ -18,6 +18,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: make CC=${{ matrix.compiler }}
       - run: make test CC=${{ matrix.compiler }}
+      # `make test` skips the generated-header check when node is absent, so
+      # that a C99 compiler is still all this project needs. Here node exists
+      # and a header that has drifted from the shared vectors must fail.
+      - run: make vectors-strict
 
   sanitizer:
     runs-on: ubuntu-latest

@@ -13,14 +13,17 @@ import { dirname, join } from "node:path";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const vectors = JSON.parse(readFileSync(join(root, "tests/fixtures/reply-claim-vectors.json"), "utf8"));
 
-const stages = (row) => {
+const firstSeen = (row, pick) => {
   const ids = [];
   for (const context of row.contexts) {
-    const id = context.pipeline_id ?? context.pipeline;
+    const id = pick(context);
     if (typeof id === "string" && id !== "" && !ids.includes(id)) ids.push(id);
   }
   return ids;
 };
+
+const stages = (row) => firstSeen(row, (c) => c.pipeline_id ?? c.pipeline);
+const skills = (row) => firstSeen(row, (c) => c.skill_id ?? c.skill);
 
 // What this derives from `contexts` has to match what the shared file says it
 // should be. Without this the header could be generated from a reading of the
@@ -35,6 +38,20 @@ for (const row of vectors.cases) {
         `expected ${JSON.stringify(expected)}`,
     );
     process.exit(1);
+  }
+  // The C test asserts pipeline ids only, so `expected.skill_ids` could be
+  // edited to anything and still pass `make test`. It is shared data with the
+  // same first-seen, unique-order rule, so check it here rather than leave a
+  // field in the fixture that nothing polices.
+  if (row.expected.skill_ids !== undefined) {
+    const derivedSkills = skills(row);
+    if (JSON.stringify(derivedSkills) !== JSON.stringify(row.expected.skill_ids)) {
+      console.error(
+        `${row.name}: derived skill ids ${JSON.stringify(derivedSkills)} do not match ` +
+          `expected ${JSON.stringify(row.expected.skill_ids)}`,
+      );
+      process.exit(1);
+    }
   }
 }
 
