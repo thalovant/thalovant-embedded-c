@@ -49,7 +49,7 @@
         "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
         "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f",
         "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e",
-        "tools/generate-reply-claim-vectors.mjs": "d3c04f7cba8139bf0d4bcf3ad490f76c6889876d14c5e8b699ff40528618d43c"
+        "tools/generate-reply-claim-vectors.mjs": "a54df84d42e96899cf0e264347a6f036c13ee06fe607b853e5767a53c58705cc"
       },
       "vectors": {
         "reply-claim-vectors.json": "tests/fixtures/reply-claim-vectors.json"
