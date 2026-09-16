@@ -55,6 +55,29 @@ for (const row of vectors.cases) {
   }
 }
 
+// A frame per context, so the C side can run thalovant_ask_event_skill_id over
+// the shared cases instead of one hand-written frame. Without this the header
+// carried pipeline ids only, and `expected.skill_ids` could be edited to
+// anything without a C test noticing.
+const frameFor = (context) => JSON.stringify(JSON.stringify({
+  msg_type: "bus",
+  payload: {
+    type: "speak",
+    data: { utterance: "x" },
+    context: { request_id: "r", ...context },
+  },
+}));
+
+const skillCases = vectors.cases.filter((row) => Array.isArray(row.expected.skill_ids));
+const widestSkillFrames = Math.max(1, ...skillCases.map((row) => row.contexts.length));
+const widestSkills = Math.max(1, ...skillCases.map((row) => skills(row).length));
+const skillLines = skillCases.map((row) => {
+  const frames = row.contexts.map(frameFor).join(", ");
+  const ids = skills(row);
+  const listed = ids.length ? ids.map((id) => JSON.stringify(id)).join(", ") : "NULL";
+  return `    {${row.contexts.length}, {${frames || "NULL"}}, ${ids.length}, {${listed}}},`;
+});
+
 const widest = Math.max(4, ...vectors.cases.map((row) => stages(row).length));
 const lines = vectors.cases.map((row) => {
   const ids = stages(row);
@@ -67,6 +90,18 @@ const header = `/* Generated from the shared Python reply-claim-vectors.json. */
 typedef struct { bool handled, failed, claimed; size_t count; const char *stages[${widest}]; } reply_claim_vector;
 static const reply_claim_vector REPLY_CLAIM_VECTORS[] = {
 ${lines.join("\n")}
+};
+
+/* One bus frame per context, so the skill ids are read the way a client reads
+   them -- through thalovant_ask_event_skill_id -- rather than transcribed. */
+typedef struct {
+  size_t frames;
+  const char *frame[${widestSkillFrames}];
+  size_t count;
+  const char *skills[${widestSkills}];
+} reply_skill_vector;
+static const reply_skill_vector REPLY_SKILL_VECTORS[] = {
+${skillLines.join("\n")}
 };
 `;
 

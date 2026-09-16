@@ -168,6 +168,32 @@ static void test_reply_claims(void)
     CHECK_STR_EQ(out, "ovos-fallback-pipeline-plugin");
     CHECK_INT_EQ(thalovant_ask_event_skill_id(frame, strlen(frame), "r", out, sizeof(out)), 13);
     CHECK_STR_EQ(out, "weather.skill");
+
+    /* The shared cases, not one hand-written frame. `expected.skill_ids` used
+       to be validated by nothing on this side: the header carried pipeline ids
+       only, so editing it passed `make test` untouched. First-seen and unique,
+       the same rule the other SDKs apply. */
+    for (size_t i = 0; i < sizeof(REPLY_SKILL_VECTORS) / sizeof(REPLY_SKILL_VECTORS[0]); ++i) {
+        const reply_skill_vector *v = &REPLY_SKILL_VECTORS[i];
+        const char *seen[8];
+        size_t count = 0;
+        for (size_t f = 0; f < v->frames; ++f) {
+            char id[128];
+            int len = thalovant_ask_event_skill_id(v->frame[f], strlen(v->frame[f]), "r", id, sizeof(id));
+            if (len <= 0) continue;
+            bool already = false;
+            for (size_t k = 0; k < count; ++k) {
+                if (strcmp(seen[k], id) == 0) { already = true; break; }
+            }
+            if (already || count >= sizeof(seen) / sizeof(seen[0])) continue;
+            /* Point at the vector's copy: `id` is reused every iteration. */
+            CHECK(count < v->count);
+            CHECK_STR_EQ(id, v->skills[count]);
+            seen[count] = v->skills[count];
+            count++;
+        }
+        CHECK_INT_EQ((int)count, (int)v->count);
+    }
     CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "other", out, sizeof(out)), THALOVANT_ERR_MISSING);
     CHECK_STR_EQ(out, "");
     CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "r", out, 2), THALOVANT_ERR_NOMEM);
