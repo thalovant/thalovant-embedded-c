@@ -26,7 +26,7 @@ OVERFLOW_BIN := $(BUILD)/thalovant-topics-overflow-tests
 TEST_SRCS := $(filter-out $(OVERFLOW_SRC),$(wildcard tests/*.c))
 TEST_BIN  := $(BUILD)/thalovant-tests
 
-.PHONY: all test fuzz clean
+.PHONY: all test vectors fuzz clean
 
 all: $(LIB)
 
@@ -45,7 +45,14 @@ $(TEST_BIN): $(TEST_SRCS) $(wildcard tests/*.h) $(wildcard tests/fixtures/*.h) $
 $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNFLAGS) $(OVERFLOW_SRC) -o $@
 
-test: $(TEST_BIN) $(OVERFLOW_BIN)
+# The shared vectors reach C as a generated header -- there is no JSON parser
+# here to read them at runtime -- so the generator has to be the only author of
+# it. Transcribed by hand, a changed expectation upstream had nothing here to
+# notice it.
+vectors:
+	node tools/generate-reply-claim-vectors.mjs --check
+
+test: $(TEST_BIN) $(OVERFLOW_BIN) vectors
 	./$(TEST_BIN)
 	./$(OVERFLOW_BIN)
 

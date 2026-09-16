@@ -1,11 +1,19 @@
 {
   "capabilities": {
+    "binary": {
+      "reason": "Not applicable: src/wire.c decodes JSON frames, not WIRE-1 bitstrings, so there is no bit reader to extend. The blocker is zlib -- the encoder chooses per frame whether to compress the metadata -- and taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint.",
+      "status": "not-applicable"
+    },
     "cli": {
       "reason": "Python command line entry point; consumers expose idiomatic language APIs or MCP tools.",
       "status": "not-applicable"
     },
     "control": {
       "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client.",
+      "status": "not-applicable"
+    },
+    "conversation": {
+      "reason": "Not applicable: thalovant_ask_request takes a session_id string, not a session, so there is nowhere to put converse_handlers and nothing to carry it into. The carry is a pure function and would port the day the C API accepts an opaque session object.",
       "status": "not-applicable"
     },
     "identity": {
@@ -20,6 +28,10 @@
       "reason": "C does not bundle the managed locale renderer or Unicode language tables.",
       "status": "not-applicable"
     },
+    "mesh": {
+      "reason": "Not applicable: this SDK exposes the wire types but no subscription API; the caller polls and dispatches its own frames.",
+      "status": "not-applicable"
+    },
     "runtime": {
       "implementation": {
         "include/thalovant/ask.h": "735d783b8d1eb5e00470fbad94eecfbe8b327572be5338d249f09a17109fe65c",
@@ -29,14 +41,18 @@
         "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
         "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0"
       },
-      "reason": "Applicable public behavior is implemented and exercised by the named regression suites and shared fixtures. HiveMind #251/#252 only changes the Python upstream client dispatcher; this consumer uses native single-dispatch transports (MCP delegates to the Node SDK), or caller-owned frame parsing in embedded C. No Python HiveMind bus dependency or slave-protocol reinjection exists here. Python now requires fixed upstream 1.1.9a1 and removes its identity-based suppression; equal independent native frames remain distinct. Reply claim metadata follows the Python string-ID contract, with first-seen ordering, case-sensitive fallback stages and legacy unstamped success. Invalid non-string stamps are ignored. Embedded C exposes bounded extraction and claim classification while its caller retains ordered IDs.",
+      "reason": "The shared vectors reach C through a generated header -- there is no JSON parser here to read them at runtime -- and the generator is now their only author, checked against the vendored file by `make test`. It was transcribed by hand from a file this repository did not carry, so a changed expectation upstream had nothing here to notice it.",
       "status": "required",
       "tests": {
-        "tests/reply_claim_vectors.h": "818087fd1e69a31b461a3f38f620b2f0261b26d43ab2e09f0283702c5bc67903",
+        "tests/reply_claim_vectors.h": "b415b3b487a5a72753471274042bbe05757ed1fe14743bb272a5a2012d53ca48",
         "tests/test_ask.c": "40abbe62d046ceced7d378e9b2782e13ffaf062841ea763d10ded03a8b4087d0",
         "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
         "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f",
-        "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e"
+        "tests/test_wire.c": "72431791c6e6d467a4e454ad6e39eb7ff9339a5086d736c20fd901020d2c7e3e",
+        "tools/generate-reply-claim-vectors.mjs": "71de7cb7fb74ee6e98c490822274383d38dc19fa91f2134dffc19d00ddea48b1"
+      },
+      "vectors": {
+        "reply-claim-vectors.json": "tests/fixtures/reply-claim-vectors.json"
       }
     },
     "session": {
@@ -63,7 +79,8 @@
     "8669034d6987af946303913780cce419efaff2a9181de7d46fbffe7092d7be9e",
     "c0d883e69ee7fa301c6e4c1b1a5c433ed290d63f79a3e6b397fdb0a988d111fa",
     "49bab2a8922b69b5cd886e7acadf217cdaa78bd94bfb48374e2f4b1cde85dfc0",
-    "003cdf02562e53bd24cc58ac8eb44411cc7ac42d06ba3bbfa46e82386ea92ef7"
+    "003cdf02562e53bd24cc58ac8eb44411cc7ac42d06ba3bbfa46e82386ea92ef7",
+    "083b2da8b256cd970b3050218d8d51f13e7355633913d086c9f4147d8790165b"
   ],
   "schema_version": 1
 }

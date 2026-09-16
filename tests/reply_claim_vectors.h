@@ -1,4 +1,5 @@
 /* Generated from the shared Python reply-claim-vectors.json. */
+/* Regenerate with tools/generate-reply-claim-vectors.mjs; do not edit. */
 typedef struct { bool handled, failed, claimed; size_t count; const char *stages[4]; } reply_claim_vector;
 static const reply_claim_vector REPLY_CLAIM_VECTORS[] = {
     {true, false, true, 0, {NULL}},
