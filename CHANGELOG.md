@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.3 - 2026-09-16
+
+- Automated patch release of the unreleased changes on `main` since v0.6.2.
+
 ## 0.6.2 - 2026-09-16
 
 - Automated patch release of the unreleased changes on `main` since v0.6.1.
