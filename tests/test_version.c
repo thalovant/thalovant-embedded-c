@@ -14,7 +14,7 @@
 
 #include "harness.h"
 
-#define TLV_EXPECTED_VERSION "0.6.3"
+#define TLV_EXPECTED_VERSION "0.6.4"
 
 void tlv_test_version(void)
 {
