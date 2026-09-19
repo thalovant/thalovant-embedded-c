@@ -1,6 +1,8 @@
 #include "thalovant/ask.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "thalovant/json.h"
@@ -471,6 +473,126 @@ int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *requ
     char *out, size_t cap)
 {
     return event_context_identifier(frame, len, request_id, "skill_id", out, cap);
+}
+
+/* A whole, non-negative count from a JSON number or numeric string, or 0. */
+static int64_t refusal_count(const char *frame, const thalovant_json_tok *tokens, int count, int object,
+    const char *field)
+{
+    int value = thalovant_json_object_get(frame, tokens, count, object, field);
+    if (value < 0) return 0;
+    if (tokens[value].type != THALOVANT_JSON_PRIMITIVE && tokens[value].type != THALOVANT_JSON_STRING) return 0;
+    char text[32];
+    size_t length = (size_t)(tokens[value].end - tokens[value].start);
+    if (length == 0 || length >= sizeof(text)) return 0;
+    memcpy(text, frame + tokens[value].start, length);
+    text[length] = '\0';
+    char *end = NULL;
+    errno = 0;
+    long long parsed = strtoll(text, &end, 10);
+    /* ERANGE too: a number past LLONG_MAX fits this buffer and comes back
+     * clamped, which would report a limit the hub never sent. */
+    if (end == text || *end != '\0' || errno == ERANGE) return 0;
+    if (parsed < 0 || parsed > THALOVANT_POLICY_COUNT_MAX) return 0;
+    return (int64_t)parsed;
+}
+
+/* Copy a bounded string field, or leave it empty. ERR_NOMEM when it will not fit. */
+static int refusal_string(const char *frame, const thalovant_json_tok *tokens, int count, int object,
+    const char *field, char *out, size_t cap)
+{
+    out[0] = '\0';
+    int value = thalovant_json_object_get(frame, tokens, count, object, field);
+    if (value < 0 || tokens[value].type != THALOVANT_JSON_STRING) return 0;
+    int length = thalovant_json_unescape(frame, &tokens[value], out, cap);
+    if (length < 0) { out[0] = '\0'; return length; }
+    return length;
+}
+
+int thalovant_ask_refusal(const char *frame, size_t len, const char *request_id,
+    thalovant_refusal *out)
+{
+    if (frame == NULL || out == NULL) return THALOVANT_ERR_INVALID;
+    memset(out, 0, sizeof(*out));
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, request_id, tokens, &kind);
+    if (count < 0) return count;
+    if (kind != THALOVANT_ASK_POLICY_DENIED) return THALOVANT_ERR_MISSING;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
+    if (data < 0) return THALOVANT_ERR_MISSING;
+    int rc = refusal_string(frame, tokens, count, data, "denied_type", out->denied_type, sizeof(out->denied_type));
+    if (rc < 0) return rc;
+    rc = refusal_string(frame, tokens, count, data, "code", out->code, sizeof(out->code));
+    if (rc < 0) return rc;
+    rc = refusal_string(frame, tokens, count, data, "reason", out->reason, sizeof(out->reason));
+    if (rc < 0) return rc;
+    if (strcmp(out->code, THALOVANT_POLICY_QUOTA_EXCEEDED) == 0) {
+        out->has_quota = true;
+        /* The policy's own detail rides nested under data.data. */
+        int inner = thalovant_json_object_get(frame, tokens, count, data, "data");
+        if (inner >= 0) {
+            rc = refusal_string(frame, tokens, count, inner, "period", out->quota_period, sizeof(out->quota_period));
+            if (rc < 0) return rc;
+            out->quota_limit = refusal_count(frame, tokens, count, inner, "limit");
+            out->quota_used = refusal_count(frame, tokens, count, inner, "used");
+            out->quota_reset_after = refusal_count(frame, tokens, count, inner, "reset_after");
+        }
+    }
+    return 0;
+}
+
+int thalovant_ask_refusal_allowed(const char *frame, size_t len, size_t index, char *out, size_t cap)
+{
+    if (frame == NULL || out == NULL || cap == 0) return THALOVANT_ERR_INVALID;
+    out[0] = '\0';
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, NULL, tokens, &kind);
+    if (count < 0) return count;
+    if (kind != THALOVANT_ASK_POLICY_DENIED) return THALOVANT_ERR_MISSING;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
+    int inner = thalovant_json_object_get(frame, tokens, count, data, "data");
+    int allowed = thalovant_json_object_get(frame, tokens, count, inner, "allowed");
+    if (allowed < 0 || tokens[allowed].type != THALOVANT_JSON_ARRAY) return THALOVANT_ERR_MISSING;
+    size_t seen = 0;
+    int stop = thalovant_json_skip(tokens, count, allowed);
+    if (stop < 0) return stop;
+    for (int token = allowed + 1; token > 0 && token < stop;
+         token = thalovant_json_skip(tokens, count, token)) {
+        /* Non-empty strings only, trimmed: a number, a null or a blank in the
+         * hub's list is not a message type an operator can allow. */
+        if (tokens[token].type != THALOVANT_JSON_STRING) continue;
+        char scratch[THALOVANT_ASK_TEXT_MAX];
+        int length = thalovant_json_unescape(frame, &tokens[token], scratch, sizeof(scratch));
+        if (length < 0) return length;
+        char *start = scratch;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r') ++start;
+        char *end = start + strlen(start);
+        while (end > start && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\n' || end[-1] == '\r')) --end;
+        *end = '\0';
+        if (*start == '\0') continue;
+        if (seen++ != index) continue;
+        size_t size = strlen(start);
+        if (size + 1 > cap) return THALOVANT_ERR_NOMEM;
+        memcpy(out, start, size + 1);
+        return (int)size;
+    }
+    return THALOVANT_ERR_MISSING;
+}
+
+bool thalovant_refusal_belongs_to_ask(const char *request_id, const char *own_request_id,
+    const char *denied_type, size_t asks_in_flight, size_t queries_in_flight,
+    size_t sends_in_flight)
+{
+    if (request_id != NULL && request_id[0] != '\0') {
+        return own_request_id != NULL && strcmp(request_id, own_request_id) == 0;
+    }
+    return denied_type != NULL
+        && strcmp(denied_type, "recognizer_loop:utterance") == 0
+        && asks_in_flight == 1 && queries_in_flight == 0 && sends_in_flight == 0;
 }
 
 bool thalovant_reply_claimed(bool handled, bool has_failure,

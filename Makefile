@@ -56,6 +56,7 @@ $(OVERFLOW_BIN): $(OVERFLOW_SRC) src/topics.c $(HDRS) tests/harness.h | $(BUILD)
 vectors:
 	@if command -v node >/dev/null 2>&1; then \
 		node tools/generate-reply-claim-vectors.mjs --check; \
+		node tools/generate-refusal-vectors.mjs --check; \
 	else \
 		echo "vectors: node not found; skipping the generated-header check (see 'make vectors-strict')"; \
 	fi
@@ -63,6 +64,7 @@ vectors:
 # What CI runs: no node is a failure here, not a skip.
 vectors-strict:
 	node tools/generate-reply-claim-vectors.mjs --check
+	node tools/generate-refusal-vectors.mjs --check
 
 test: $(TEST_BIN) $(OVERFLOW_BIN) vectors
 	./$(TEST_BIN)

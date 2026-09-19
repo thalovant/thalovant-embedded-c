@@ -32,11 +32,28 @@
       "reason": "Not applicable: this SDK exposes the wire types but no subscription API; the caller polls and dispatches its own frames.",
       "status": "not-applicable"
     },
+    "refusal": {
+      "implementation": {
+        "include/thalovant/ask.h": "0fe82749f330e1b7c43cb58547d7c161e860fdc5397c2d971ec6c833905604fc",
+        "src/ask.c": "b6347ff2d1623b4959d557adc945207dc39860a4e329c261417dec840954cb16"
+      },
+      "reason": "thalovant_ask_refusal() and thalovant_ask_refusal_allowed() read a denial into caller-owned bounded buffers, including the quota numbers a spent allowance sends; thalovant_refusal_belongs_to_ask() is the shared correlation rule, with the in-flight counts caller-owned as correlation ids already are -- this library owns no sockets and no ask loop, so where a caller starts an untracked send's grace window is the caller's own. An unanswered question is already its own kind (THALOVANT_ASK_INTENT_FAILURE) and is asserted never to read as a refusal. tests/refusal_vectors.h is generated from the shared vectors by tools/generate-refusal-vectors.mjs, which CI re-checks.",
+      "status": "required",
+      "tests": {
+        "tests/fixtures/refusal-vectors.json": "6b0f4128f1cc9fd8a54944410ce93c6515bac6cde9257284e313a4fea825bfcb",
+        "tests/refusal_vectors.h": "1986cc23319a335f000871564c4771d89bb4144e7018c5c4792ccf5022caaf12",
+        "tests/test_refusal.c": "9276e0d085ff84f544cbfc0462639a7a21e702a1db404a3dfcebef3195d59a1e",
+        "tools/generate-refusal-vectors.mjs": "11833bab82dfef811ead23901c7c0196e737f56dbdef42d40244bc2be85bdbd4"
+      },
+      "vectors": {
+        "refusal-vectors.json": "tests/fixtures/refusal-vectors.json"
+      }
+    },
     "runtime": {
       "implementation": {
-        "include/thalovant/ask.h": "735d783b8d1eb5e00470fbad94eecfbe8b327572be5338d249f09a17109fe65c",
+        "include/thalovant/ask.h": "0fe82749f330e1b7c43cb58547d7c161e860fdc5397c2d971ec6c833905604fc",
         "include/thalovant/thalovant.h": "c5b83dd73f6c8caa18870d76e9fbefacee61025d236ed22da4b206fd4f25a6d7",
-        "src/ask.c": "59889409665a3af4e9e149be4523753852eb2e4246493a227b393f28f590d02b",
+        "src/ask.c": "b6347ff2d1623b4959d557adc945207dc39860a4e329c261417dec840954cb16",
         "src/noise.c": "207e403b46ac3d5d4388cb1331778b8b2f4cc04033cc0dcbfe60bb69d058f7b8",
         "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
         "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0"
@@ -83,7 +100,8 @@
     "083b2da8b256cd970b3050218d8d51f13e7355633913d086c9f4147d8790165b",
     "1e8b76b34b755207bb754e5f4c7364334f14476dee70fce1d2687bfdc1545f30",
     "f6a74ead44d53658228da3f4457334f3e922b67dd1e33b43c3ba8b6f7c066bf9",
-    "6f5f697b07eb86da6877faf8aa27138430f886495ac965d08a28fba780e411cd"
+    "6f5f697b07eb86da6877faf8aa27138430f886495ac965d08a28fba780e411cd",
+    "2377330566e575bb3fda77998d943667bf0795940f9d569a5b8bc7f4f0e5e486"
   ],
   "schema_version": 1
 }
