@@ -125,6 +125,75 @@ int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *requ
 bool thalovant_reply_claimed(bool handled, bool has_failure,
     const char *const *pipeline_ids, size_t pipeline_count);
 
+/*
+ * What the hub said when it refused, and whose refusal it is.
+ *
+ * The hub sends hive.policy.denied the instant it refuses, built with source
+ * and destination context only, so it carries no request id and names the type
+ * it refused instead. Three different things arrive under that one name and
+ * each needs something different said about it: an allow-list refusal
+ * (acl_disallowed_type, with the allowed list), a spent allowance
+ * (intent_quota_exceeded, with the numbers), and a hub whose agent bus is down
+ * (backend_unavailable), which nothing the caller does will fix.
+ *
+ * The policy's own detail rides nested under data.data (hivemind-core
+ * _send_policy_denied: "data": verdict.data). Shared with every other SDK
+ * through contracts/conformance/refusal-vectors.json.
+ */
+#define THALOVANT_POLICY_QUOTA_EXCEEDED "intent_quota_exceeded"
+#define THALOVANT_POLICY_BACKEND_UNAVAILABLE "backend_unavailable"
+
+/*
+ * How long a fire-and-forget utterance counts as possibly still being refused.
+ * Denials come back as fast as the hub admits a message, so this is generous
+ * on purpose: a wrong "in flight" only costs an ask the deadline it always
+ * had, where a wrong "not in flight" ends a question the hub never refused.
+ */
+#define THALOVANT_UNTRACKED_UTTERANCE_GRACE_SECONDS 10
+
+typedef struct {
+    char denied_type[THALOVANT_ASK_TEXT_MAX];
+    char code[THALOVANT_POLICY_CODE_MAX];
+    char reason[THALOVANT_POLICY_REASON_MAX];
+    /* True only for THALOVANT_POLICY_QUOTA_EXCEEDED; the rest are then zero. */
+    bool has_quota;
+    char quota_period[THALOVANT_POLICY_CODE_MAX];
+    /* Whole and non-negative: a negative limit, usage or reset time is not
+     * something a policy can mean, and would have an app say "-1 of -5". */
+    long quota_limit;
+    long quota_used;
+    long quota_reset_after;
+} thalovant_refusal;
+
+/*
+ * Read a hive.policy.denied frame. Returns 0, ERR_MISSING for a frame that is
+ * not a denial (or fails correlation), ERR_INVALID for bad arguments, and
+ * ERR_NOMEM when a field does not fit its bounded buffer.
+ */
+int thalovant_ask_refusal(const char *frame, size_t len, const char *request_id,
+    thalovant_refusal *out);
+
+/*
+ * Copy the nth message type this connection may publish, as the hub listed
+ * them: non-empty strings only, trimmed. Returns the length, or ERR_MISSING
+ * past the end. Storage stays the caller's, as everywhere else here.
+ */
+int thalovant_ask_refusal_allowed(const char *frame, size_t len, size_t index,
+    char *out, size_t cap);
+
+/*
+ * Whether a denial is this ask's to fail with. A denial carrying a request id
+ * is judged by it, like any reply; without one it is this ask's only when it
+ * names the type this ask sent and this ask is the only utterance out. The
+ * counts are the caller's to keep, as correlation ids are: a second ask, a
+ * query, or a fire-and-forget utterance still inside the grace window means
+ * either could be the one refused, and a wrong guess ends a question the hub
+ * never refused.
+ */
+bool thalovant_refusal_belongs_to_ask(const char *request_id, const char *own_request_id,
+    const char *denied_type, size_t asks_in_flight, size_t queries_in_flight,
+    size_t sends_in_flight);
+
 /* Call before retaining a clip. Zero-initialize once per reply. Drop does not
  * settle a reply. Integrators deduplicate their own transport deliveries. */
 typedef struct { size_t encoded_chars; size_t dropped; } thalovant_audio_budget;
