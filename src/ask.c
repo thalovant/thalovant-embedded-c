@@ -1,6 +1,7 @@
 #include "thalovant/ask.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -487,8 +488,11 @@ static long refusal_count(const char *frame, const thalovant_json_tok *tokens, i
     memcpy(text, frame + tokens[value].start, length);
     text[length] = '\0';
     char *end = NULL;
+    errno = 0;
     long parsed = strtol(text, &end, 10);
-    if (end == text || *end != '\0' || parsed < 0) return 0;
+    /* ERANGE too: a number past LONG_MAX fits this buffer and comes back
+     * clamped, which would report a limit the hub never sent. */
+    if (end == text || *end != '\0' || errno == ERANGE || parsed < 0) return 0;
     return parsed;
 }
 

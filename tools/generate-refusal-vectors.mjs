@@ -61,7 +61,7 @@ static const refusal_vector REFUSAL_VECTORS[] = {
 ${refusalLines.join("\n")}
 };
 
-/* The hub understood and has nothing for it: not a refusal, not a fault. */
+/* The hub understood and has nothing for it: a failure event, but never a refusal. */
 typedef struct { const char *name; const char *frame; } unanswered_vector;
 static const unanswered_vector UNANSWERED_VECTORS[] = {
 ${unansweredLines.join("\n")}

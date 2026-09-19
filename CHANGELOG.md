@@ -4,6 +4,7 @@
 
 - `thalovant_ask_refusal()` reads what the hub said when it refused: the type, the code, the reason, and -- for a spent `intent_quota_exceeded` -- which counter ran out, its limit, how much was used and how long until it resets. Without them an integrator could only say "refused", which is what an app showed somebody who had simply used up the day. `thalovant_ask_refusal_allowed()` walks the types the connection may publish, non-blank and trimmed, one bounded copy at a time.
 - `thalovant_refusal_belongs_to_ask()` is the shared rule for a denial the hub could not correlate. The hub builds `hive.policy.denied` with source and destination context only, so it carries no request id and names the refused type instead: that is enough when the caller has one utterance out, and a guess when a second ask, a query, or a fire-and-forget utterance inside `THALOVANT_UNTRACKED_UTTERANCE_GRACE_SECONDS` could be the one refused. The counts stay the caller's, as correlation ids already are: this library owns no sockets and no ask loop.
+- A quota number past `LONG_MAX` reads as 0 rather than the clamped value `strtol` returns, so a limit the hub never sent is never reported.
 - Declares the parity contract's new `refusal` capability. `tests/refusal_vectors.h` is generated from the shared `refusal-vectors.json` by `tools/generate-refusal-vectors.mjs`, and `make vectors-strict` re-checks it, so a changed expectation upstream has something here to notice it.
 
 ## 0.6.3 - 2026-09-16
