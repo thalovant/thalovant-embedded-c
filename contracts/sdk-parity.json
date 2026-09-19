@@ -37,11 +37,11 @@
         "include/thalovant/ask.h": "04bc2589345147d7cce9f283a4c4f79c7efd7272fcb76f0ce4ce2eabaa51f228",
         "src/ask.c": "658d6c1ff0cadc17f2a62a57e1699e4f7f53872ec1338eeed9dbee6e9efa820d"
       },
-      "reason": "thalovant_ask_refusal() and thalovant_ask_refusal_allowed() read a denial into caller-owned bounded buffers, including the quota numbers a spent allowance sends; thalovant_refusal_belongs_to_ask() is the shared correlation rule, with the in-flight counts caller-owned as correlation ids already are -- this library owns no sockets and no ask loop. An unanswered question is already its own kind (THALOVANT_ASK_INTENT_FAILURE) and is asserted never to read as a refusal. tests/refusal_vectors.h is generated from the shared vectors by tools/generate-refusal-vectors.mjs, which CI re-checks.",
+      "reason": "thalovant_ask_refusal() and thalovant_ask_refusal_allowed() read a denial into caller-owned bounded buffers, including the quota numbers a spent allowance sends; thalovant_refusal_belongs_to_ask() is the shared correlation rule, with the in-flight counts caller-owned as correlation ids already are -- this library owns no sockets and no ask loop, so where a caller starts an untracked send's grace window is the caller's own. An unanswered question is already its own kind (THALOVANT_ASK_INTENT_FAILURE) and is asserted never to read as a refusal. tests/refusal_vectors.h is generated from the shared vectors by tools/generate-refusal-vectors.mjs, which CI re-checks.",
       "status": "required",
       "tests": {
-        "tests/fixtures/refusal-vectors.json": "8795fcd9d8b5ac790176c13ea077b701a5dc1fd584a717ed08744bcab8d21c82",
-        "tests/refusal_vectors.h": "b3513af8d211506d10f1ce40009c4f79f5c4164951ceebbc8c941e5cd694de83",
+        "tests/fixtures/refusal-vectors.json": "08a55b252514427ea7123294685f1f6dd72306ee274cff77013590870d8fde7e",
+        "tests/refusal_vectors.h": "bc9608f86b0a902424f2894b715c313b0ea48acc1f8d28d262d6c7c70ea33eab",
         "tests/test_refusal.c": "9276e0d085ff84f544cbfc0462639a7a21e702a1db404a3dfcebef3195d59a1e",
         "tools/generate-refusal-vectors.mjs": "7cc2dd035d44c66b59700e7b4b16e501c335442a90c57b5bebf3b3fb7d76ee23"
       },
@@ -101,7 +101,7 @@
     "1e8b76b34b755207bb754e5f4c7364334f14476dee70fce1d2687bfdc1545f30",
     "f6a74ead44d53658228da3f4457334f3e922b67dd1e33b43c3ba8b6f7c066bf9",
     "6f5f697b07eb86da6877faf8aa27138430f886495ac965d08a28fba780e411cd",
-    "4c7780ced5bb3e011d10a0ac502bba61c08eaebfd27de6c827c5d47351ac2b4e"
+    "e0de5ebc373fcec60d083651e4001e22da8978419ad0d24a24d326db1e4e8e2a"
   ],
   "schema_version": 1
 }
