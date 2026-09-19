@@ -476,7 +476,7 @@ int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *requ
 }
 
 /* A whole, non-negative count from a JSON number or numeric string, or 0. */
-static long refusal_count(const char *frame, const thalovant_json_tok *tokens, int count, int object,
+static int64_t refusal_count(const char *frame, const thalovant_json_tok *tokens, int count, int object,
     const char *field)
 {
     int value = thalovant_json_object_get(frame, tokens, count, object, field);
@@ -489,11 +489,12 @@ static long refusal_count(const char *frame, const thalovant_json_tok *tokens, i
     text[length] = '\0';
     char *end = NULL;
     errno = 0;
-    long parsed = strtol(text, &end, 10);
-    /* ERANGE too: a number past LONG_MAX fits this buffer and comes back
+    long long parsed = strtoll(text, &end, 10);
+    /* ERANGE too: a number past LLONG_MAX fits this buffer and comes back
      * clamped, which would report a limit the hub never sent. */
-    if (end == text || *end != '\0' || errno == ERANGE || parsed < 0) return 0;
-    return parsed;
+    if (end == text || *end != '\0' || errno == ERANGE) return 0;
+    if (parsed < 0 || parsed > THALOVANT_POLICY_COUNT_MAX) return 0;
+    return (int64_t)parsed;
 }
 
 /* Copy a bounded string field, or leave it empty. ERR_NOMEM when it will not fit. */

@@ -1,5 +1,7 @@
 /* Generated from the shared Python refusal-vectors.json. */
 /* Regenerate with tools/generate-refusal-vectors.mjs; do not edit. */
+#include <stdint.h>
+
 #define REFUSAL_GRACE_SECONDS 10
 
 /* A refusal, as the hub sends it, beside what every SDK must read out of it. */
@@ -11,7 +13,7 @@ typedef struct {
   const char *reason;
   bool has_quota;
   const char *period;
-  long limit, used, reset_after;
+  int64_t limit, used, reset_after;
   size_t allowed_count;
   const char *allowed[2];
 } refusal_vector;
@@ -23,7 +25,7 @@ static const refusal_vector REFUSAL_VECTORS[] = {
     {"negative counts are not counts", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"intent_quota_exceeded\",\"reason\":\"daily intent quota exceeded\",\"data\":{\"period\":\"daily\",\"limit\":-5,\"used\":\"-1\",\"reset_after\":-60}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "intent_quota_exceeded", "daily intent quota exceeded", true, "daily", 0, 0, 0, 0, {NULL, NULL}},
     {"quota numbers on a refusal that is not a quota are ignored", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"acl_disallowed_type\",\"reason\":\"not allowed\",\"data\":{\"period\":\"daily\",\"limit\":5,\"used\":5,\"reset_after\":60}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "acl_disallowed_type", "not allowed", false, "", 0, 0, 0, 0, {NULL, NULL}},
     {"a number no policy could have meant is not a count", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"intent_quota_exceeded\",\"reason\":\"daily intent quota exceeded\",\"data\":{\"period\":\"daily\",\"limit\":\"99999999999999999999\",\"used\":100000000000000000000,\"reset_after\":1.5}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "intent_quota_exceeded", "daily intent quota exceeded", true, "daily", 0, 0, 0, 0, {NULL, NULL}},
-    {"a number past what a count can hold is not a count", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"intent_quota_exceeded\",\"reason\":\"daily intent quota exceeded\",\"data\":{\"period\":\"daily\",\"limit\":9223372036854776000,\"used\":9007199254740991,\"reset_after\":0}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "intent_quota_exceeded", "daily intent quota exceeded", true, "daily", 0, 9007199254740991, 0, 0, {NULL, NULL}},
+    {"a number past what every decoder carries exactly is not a count", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"intent_quota_exceeded\",\"reason\":\"daily intent quota exceeded\",\"data\":{\"period\":\"daily\",\"limit\":9007199254740992,\"used\":9007199254740991,\"reset_after\":0}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "intent_quota_exceeded", "daily intent quota exceeded", true, "daily", 0, 9007199254740991, 0, 0, {NULL, NULL}},
     {"a hub whose agent bus is down refuses with its own code", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"backend_unavailable\",\"reason\":\"agent bus is not connected\",\"data\":{}},\"context\":{\"source\":\"hivemind-core\",\"destination\":\"sat-1\"}}}", "recognizer_loop:utterance", "backend_unavailable", "agent bus is not connected", false, "", 0, 0, 0, 0, {NULL, NULL}},
     {"only non-blank strings are message types an operator can allow", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\",\"code\":\"acl_disallowed_type\",\"reason\":\"\",\"data\":{\"allowed\":[\"speak\",3,null,\"  \",\"  mycroft.stop  \",true]}},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "acl_disallowed_type", "", false, "", 0, 0, 0, 2, {"speak", "mycroft.stop"}},
     {"a denial with no nested data at all is still a refusal", "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"recognizer_loop:utterance\"},\"context\":{\"source\":\"hivemind-core\"}}}", "recognizer_loop:utterance", "", "", false, "", 0, 0, 0, 0, {NULL, NULL}},

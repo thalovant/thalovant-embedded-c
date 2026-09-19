@@ -151,6 +151,15 @@ bool thalovant_reply_claimed(bool handled, bool has_failure,
  */
 #define THALOVANT_UNTRACKED_UTTERANCE_GRACE_SECONDS 10
 
+/*
+ * The largest count the wire can carry, being the largest whole number every
+ * JSON decoder holds exactly. Above it a decoder backed by a double can no
+ * longer tell one whole number from the next, so two SDKs would report
+ * different allowances for the same denial. Anything larger, negative or
+ * fractional reads as 0.
+ */
+#define THALOVANT_POLICY_COUNT_MAX INT64_C(9007199254740991)
+
 typedef struct {
     char denied_type[THALOVANT_ASK_TEXT_MAX];
     char code[THALOVANT_POLICY_CODE_MAX];
@@ -158,11 +167,13 @@ typedef struct {
     /* True only for THALOVANT_POLICY_QUOTA_EXCEEDED; the rest are then zero. */
     bool has_quota;
     char quota_period[THALOVANT_POLICY_CODE_MAX];
-    /* Whole and non-negative: a negative limit, usage or reset time is not
-     * something a policy can mean, and would have an app say "-1 of -5". */
-    long quota_limit;
-    long quota_used;
-    long quota_reset_after;
+    /* Whole, non-negative, and no larger than THALOVANT_POLICY_COUNT_MAX: a
+     * negative limit, usage or reset time is not something a policy can mean,
+     * and would have an app say "-1 of -5". int64_t rather than long, because
+     * the ceiling is the contract's and does not shrink on a 32-bit target. */
+    int64_t quota_limit;
+    int64_t quota_used;
+    int64_t quota_reset_after;
 } thalovant_refusal;
 
 /*

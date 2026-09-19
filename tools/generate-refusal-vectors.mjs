@@ -42,6 +42,8 @@ const correlationLines = vectors.correlation.map((row) =>
 
 const header = `/* Generated from the shared Python refusal-vectors.json. */
 /* Regenerate with tools/generate-refusal-vectors.mjs; do not edit. */
+#include <stdint.h>
+
 #define REFUSAL_GRACE_SECONDS ${vectors.untracked_grace_seconds}
 
 /* A refusal, as the hub sends it, beside what every SDK must read out of it. */
@@ -53,7 +55,7 @@ typedef struct {
   const char *reason;
   bool has_quota;
   const char *period;
-  long limit, used, reset_after;
+  int64_t limit, used, reset_after;
   size_t allowed_count;
   const char *allowed[${widestAllowed}];
 } refusal_vector;
