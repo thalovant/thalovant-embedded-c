@@ -58,7 +58,7 @@
         "src/request_helpers.c": "88c67dcb00d6004b0f5077a7b1bccda3056cd7638b75335e3ef8554ca2d0a0c9",
         "src/wire.c": "d77f39df5ce2aca8c8f453cc5a07d4116c1fbe5b1e1c0d250a0d5e9e6fe41fc0"
       },
-      "reason": "The shared vectors reach C through a generated header -- there is no JSON parser here to read them at runtime -- and the generator is now their only author, checked against the vendored file by `make test`. It was transcribed by hand from a file this repository did not carry, so a changed expectation upstream had nothing here to notice it.",
+      "reason": "The shared vectors reach C through a generated header -- there is no JSON parser here to read them at runtime -- and the generator is now their only author, checked against the vendored file by `make test`. It was transcribed by hand from a file this repository did not carry, so a changed expectation upstream had nothing here to notice it. The listing language retry added to the reference is orchestration, not encoding: it sends, looks at an empty answer and sends again. This SDK builds frames and the caller owns the socket, so there is no loop here to put it in. The tag it would retry with needs CLDR's likely subtags, which is 1345 rows and about 12 KB of rodata for a table this library would never call itself -- the same footprint decision as zlib under `binary`, and inventing it to fill a cell is what this contract says not to do. A caller doing its own networking builds the second intent_list frame with the tag of its choice, exactly as it builds the first. listed_in is that caller's own bookkeeping.",
       "status": "required",
       "tests": {
         "tests/reply_claim_vectors.h": "fc6020c5e819e525721d5f8b180056a3ac65a2415eac8f163565f9ea8e8d397f",
@@ -101,7 +101,8 @@
     "1e8b76b34b755207bb754e5f4c7364334f14476dee70fce1d2687bfdc1545f30",
     "f6a74ead44d53658228da3f4457334f3e922b67dd1e33b43c3ba8b6f7c066bf9",
     "6f5f697b07eb86da6877faf8aa27138430f886495ac965d08a28fba780e411cd",
-    "2377330566e575bb3fda77998d943667bf0795940f9d569a5b8bc7f4f0e5e486"
+    "2377330566e575bb3fda77998d943667bf0795940f9d569a5b8bc7f4f0e5e486",
+    "76bc1eb9957da5a6fdf03e89f3905f8d37d3ef2fe7c841ba751718105ca30a45"
   ],
   "schema_version": 1
 }
