@@ -1,5 +1,9 @@
 {
   "capabilities": {
+    "api-errors": {
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client, so no API error ever reaches it; callers that talk to the Thalovant API do so with their own HTTP stack and read its Problem+JSON body themselves.",
+      "status": "not-applicable"
+    },
     "binary": {
       "reason": "Not applicable: src/wire.c decodes JSON frames, not WIRE-1 bitstrings, so there is no bit reader to extend. The blocker is zlib -- the encoder chooses per frame whether to compress the metadata -- and taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint.",
       "status": "not-applicable"
@@ -103,7 +107,8 @@
     "6f5f697b07eb86da6877faf8aa27138430f886495ac965d08a28fba780e411cd",
     "2377330566e575bb3fda77998d943667bf0795940f9d569a5b8bc7f4f0e5e486",
     "76bc1eb9957da5a6fdf03e89f3905f8d37d3ef2fe7c841ba751718105ca30a45",
-    "34a21f2ad875b220a571613e25b6a6e5f3d8de1a776f4949a7ab63ba93e07b16"
+    "34a21f2ad875b220a571613e25b6a6e5f3d8de1a776f4949a7ab63ba93e07b16",
+    "f79d99e9acd2fe299e3b313102541e47b366751defe5fa0dcfa44053aa7f007d"
   ],
   "schema_version": 1
 }
