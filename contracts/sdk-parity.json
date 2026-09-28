@@ -12,12 +12,28 @@
       "reason": "Python command line entry point; consumers expose idiomatic language APIs or MCP tools.",
       "status": "not-applicable"
     },
+    "connection-admission": {
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client, so there is no operation here to poll while a hub admits a connection. The caller owns every request it would make, and its own schedule.",
+      "status": "not-applicable"
+    },
+    "connection-kinds": {
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client: it creates and deletes no connections, so it has no answer to check the kind against and no refusal to classify. The caller owns every request it would make.",
+      "status": "not-applicable"
+    },
     "control": {
       "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client.",
       "status": "not-applicable"
     },
     "conversation": {
       "reason": "Not applicable: thalovant_ask_request takes a session_id string, not a session, so there is nowhere to put converse_handlers and nothing to carry it into. The carry is a pure function and would port the day the C API accepts an opaque session object.",
+      "status": "not-applicable"
+    },
+    "device-login": {
+      "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client, so there is no request here to begin, poll or revoke a device sign-in with. A device that signs in does it through its caller's own HTTP stack, and device-login-vectors.json is the specification that caller follows.",
+      "status": "not-applicable"
+    },
+    "home-link": {
+      "reason": "The caller owns the socket, the loop and every handler, so this library holds no connection on which a thalovant.home.request could arrive or be answered. A caller that runs its own loop builds the reply from the request it holds -- the context with source and destination swapped -- and follows the response rules in home-link-vectors.json.",
       "status": "not-applicable"
     },
     "identity": {
@@ -108,7 +124,8 @@
     "2377330566e575bb3fda77998d943667bf0795940f9d569a5b8bc7f4f0e5e486",
     "76bc1eb9957da5a6fdf03e89f3905f8d37d3ef2fe7c841ba751718105ca30a45",
     "34a21f2ad875b220a571613e25b6a6e5f3d8de1a776f4949a7ab63ba93e07b16",
-    "f79d99e9acd2fe299e3b313102541e47b366751defe5fa0dcfa44053aa7f007d"
+    "f79d99e9acd2fe299e3b313102541e47b366751defe5fa0dcfa44053aa7f007d",
+    "b16579bd501d18147e6b74b02d67d98ce6aeb850f369de2138fbdfb598469b7c"
   ],
   "schema_version": 1
 }
