@@ -14,8 +14,9 @@ private key for **every** connection, including reconnects. Store the hub's
 hub `node_id`. A known pin is enforced in both XX and KK; never delete or
 replace a pin yourself.
 
-When a KK attempt fails -- the hub closes with 1000, 1005 or 1008 during it,
-or its answer does not authenticate -- open one new connection at once and
+When a KK attempt fails -- the hub closes with 1000 or 1008 during it, or
+closes with no status (which your WebSocket API may report as 1005), or its
+answer does not authenticate -- open one new connection at once and
 use XX: call `thalovant_noise_select` with `has_pin = 0`, then
 `thalovant_noise_init` with the pin as before. This is not a downgrade. The
 pin is still checked when XX completes, so a hub whose key is not the pinned
