@@ -5,7 +5,7 @@
       "status": "not-applicable"
     },
     "binary": {
-      "reason": "Not applicable: src/wire.c does decode WIRE-1 bitstrings (thalovant_wire_decode_binary), but returns THALOVANT_ERR_UNSUPPORTED for a frame with a compressed part, and the encoder chooses per frame whether to compress. The blocker is zlib: taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint rather than about parity, and it also makes the 32 MiB inflation cap moot here.",
+      "reason": "Not applicable: src/wire.c does decode WIRE-1 bitstrings (thalovant_wire_decode_binary), but returns THALOVANT_ERR_UNSUPPORTED for a frame with a compressed part, and a hub's encoder chooses per frame whether to compress, so a client cannot opt out (this library's own thalovant_wire_encode_binary never compresses). The blocker is zlib: taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint rather than about parity, and it also makes the 32 MiB inflation cap moot here.",
       "status": "not-applicable"
     },
     "cli": {
