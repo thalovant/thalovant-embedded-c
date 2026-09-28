@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1 — 2026-09-28
+
+- `docs/noise-v3.md` no longer tells callers never to "retry with weaker authentication on a failed handshake". That contradicted the KK-then-XX rule every SDK follows. When a pinned KK attempt fails, the caller opens one new connection at once and uses XX. The pin is still checked when XX completes, so it is not weaker, and only XX tells a changed password from a changed hub key. The page now says how to do it with `thalovant_noise_select` and `thalovant_noise_init`.
+- Acknowledges parity reference `d33dc2be8b00` (thalovant-python-sdk 0.9.1). The new `link-carriers` capability is declared not applicable, since the caller owns every carrier. The `binary` declaration now says what `src/wire.c` does: it decodes WIRE-1 and refuses a compressed part, and zlib is the real blocker. Nothing else in this library changes. Its two required capabilities, `refusal` and `runtime`, have unchanged vectors.
+
 ## 0.7.0
 
 - `thalovant_ask_refusal()` reads what the hub said when it refused: the type, the code, the reason, and -- for a spent `intent_quota_exceeded` -- which counter ran out, its limit, how much was used and how long until it resets. Without them an integrator could only say "refused", which is what an app showed somebody who had simply used up the day. `thalovant_ask_refusal_allowed()` walks the types the connection may publish, non-blank and trimmed, one bounded copy at a time.

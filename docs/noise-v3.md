@@ -11,8 +11,17 @@ Persist a 32-byte X25519 private key per client identity in protected storage.
 Generate it with the platform CSPRNG once. Generate a fresh 32-byte ephemeral
 private key for **every** connection, including reconnects. Store the hub's
 32-byte static public key after an authenticated handshake and bind it to the
-hub `node_id`. A known pin is enforced in both XX and KK; do not delete a pin
-or retry with weaker authentication on a failed handshake.
+hub `node_id`. A known pin is enforced in both XX and KK; never delete or
+replace a pin yourself.
+
+When a KK attempt fails -- the hub closes with 1000, 1005 or 1008 during it,
+or its answer does not authenticate -- open one new connection at once and
+use XX: call `thalovant_noise_select` with `has_pin = 0`, then
+`thalovant_noise_init` with the pin as before. This is not a downgrade. The
+pin is still checked when XX completes, so a hub whose key is not the pinned
+one still fails, and only XX tells a changed password (a refusal) from a
+changed hub key (a pin mismatch). A KK attempt that simply ran out of time is
+not retried: the caller's deadline is already spent.
 
 The PSK is exactly Argon2id v1.3(password UTF-8, SHA256(node_id UTF-8)), with
 3 passes, 65536 KiB, 1 lane and 32-byte output. `thalovant_noise_psk` derives it

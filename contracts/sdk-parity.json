@@ -5,7 +5,7 @@
       "status": "not-applicable"
     },
     "binary": {
-      "reason": "Not applicable: src/wire.c decodes JSON frames, not WIRE-1 bitstrings, so there is no bit reader to extend. The blocker is zlib -- the encoder chooses per frame whether to compress the metadata -- and taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint.",
+      "reason": "Not applicable: src/wire.c does decode WIRE-1 bitstrings (thalovant_wire_decode_binary), but returns THALOVANT_ERR_UNSUPPORTED for a frame with a compressed part, and the encoder chooses per frame whether to compress. The blocker is zlib: taking a compression dependency into a -std=c99 -pedantic microcontroller target is a decision about this SDK's footprint rather than about parity, and it also makes the 32 MiB inflation cap moot here.",
       "status": "not-applicable"
     },
     "cli": {
@@ -42,6 +42,10 @@
     },
     "inventory": {
       "reason": "C has no managed inventory object model or filesystem cache; callers own parsing and storage.",
+      "status": "not-applicable"
+    },
+    "link-carriers": {
+      "reason": "Embedded C is a caller-buffer wire library: the caller owns every carrier, socket and retry, so there is no connect of the library's own to follow a failed KK with XX. docs/noise-v3.md tells the caller how to do it with thalovant_noise_select and thalovant_noise_init.",
       "status": "not-applicable"
     },
     "listing": {
@@ -125,7 +129,8 @@
     "76bc1eb9957da5a6fdf03e89f3905f8d37d3ef2fe7c841ba751718105ca30a45",
     "34a21f2ad875b220a571613e25b6a6e5f3d8de1a776f4949a7ab63ba93e07b16",
     "f79d99e9acd2fe299e3b313102541e47b366751defe5fa0dcfa44053aa7f007d",
-    "2460eb90bd56b1b182be3db365ba29bfef712d4ea2748061652ba0f28dcf6f50"
+    "2460eb90bd56b1b182be3db365ba29bfef712d4ea2748061652ba0f28dcf6f50",
+    "d33dc2be8b0074be4e16d89a4b615f0e6bc32d99fb513cb75e20c09cd0fab4b6"
   ],
   "schema_version": 1
 }
