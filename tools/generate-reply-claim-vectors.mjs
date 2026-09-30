@@ -59,35 +59,62 @@ for (const row of vectors.cases) {
 // the shared cases instead of one hand-written frame. Without this the header
 // carried pipeline ids only, and `expected.skill_ids` could be edited to
 // anything without a C test noticing.
-const frameFor = (context) => JSON.stringify(JSON.stringify({
+const frameFor = (context, meta, name) => JSON.stringify(JSON.stringify({
   msg_type: "bus",
   payload: {
-    type: "speak",
-    data: { utterance: "x" },
+    type: name ?? "speak",
+    data: meta !== undefined && meta !== null ? { utterance: "x", meta } : { utterance: "x" },
     context: { request_id: "r", ...context },
   },
 }));
+
+// One frame per context, carrying that context's `metas` entry (0.9.2) on
+// `data.meta` when present, and that context's `names` entry (0.9.2) as the
+// frame's payload.type when present -- an absent/null entry means "speak",
+// so a case can represent a claim asserted on some other event kind (for
+// example ovos.utterance.handled) and prove the accessor rejects it. The C
+// test runs thalovant_ask_event_claim_asserted over these -- the same
+// accessor a real caller would use -- and ORs the result into
+// thalovant_reply_claimed_with_meta, rather than trusting a pre-computed
+// "was this asserted" bit that could drift from the vectors.
+const metaFramesFor = (row) => {
+  const metas = row.metas ?? row.contexts.map(() => null);
+  const names = row.names ?? row.contexts.map(() => null);
+  return row.contexts.map((context, i) => frameFor(context, metas[i], names[i]));
+};
 
 const skillCases = vectors.cases.filter((row) => Array.isArray(row.expected.skill_ids));
 const widestSkillFrames = Math.max(1, ...skillCases.map((row) => row.contexts.length));
 const widestSkills = Math.max(1, ...skillCases.map((row) => skills(row).length));
 const skillLines = skillCases.map((row) => {
-  const frames = row.contexts.map(frameFor).join(", ");
+  const frames = metaFramesFor(row).join(", ");
   const ids = skills(row);
   const listed = ids.length ? ids.map((id) => JSON.stringify(id)).join(", ") : "NULL";
   return `    {${row.contexts.length}, {${frames || "NULL"}}, ${ids.length}, {${listed}}},`;
 });
 
 const widest = Math.max(4, ...vectors.cases.map((row) => stages(row).length));
+const widestClaimFrames = Math.max(1, ...vectors.cases.map((row) => row.contexts.length));
 const lines = vectors.cases.map((row) => {
   const ids = stages(row);
   const listed = ids.length ? ids.map((id) => JSON.stringify(id)).join(", ") : "NULL";
-  return `    {${row.handled}, ${row.failed}, ${row.expected.claimed}, ${ids.length}, {${listed}}},`;
+  const frames = metaFramesFor(row).join(", ");
+  return `    {${row.handled}, ${row.failed}, ${row.expected.claimed}, ${ids.length}, {${listed}}, ` +
+    `${row.contexts.length}, {${frames || "NULL"}}},`;
 });
 
 const header = `/* Generated from the shared Python reply-claim-vectors.json. */
 /* Regenerate with tools/generate-reply-claim-vectors.mjs; do not edit. */
-typedef struct { bool handled, failed, claimed; size_t count; const char *stages[${widest}]; } reply_claim_vector;
+typedef struct {
+  bool handled, failed, claimed;
+  size_t count;
+  const char *stages[${widest}];
+  /* One bus frame per context, carrying that context's 0.9.2 \`metas\` entry
+     on data.meta when present, so the C test derives claim assertion through
+     thalovant_ask_event_claim_asserted rather than a transcribed bit. */
+  size_t frames;
+  const char *frame[${widestClaimFrames}];
+} reply_claim_vector;
 static const reply_claim_vector REPLY_CLAIM_VECTORS[] = {
 ${lines.join("\n")}
 };

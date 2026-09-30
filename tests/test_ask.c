@@ -158,10 +158,59 @@ static void test_reply_claims(void)
 {
     for (size_t i = 0; i < sizeof(REPLY_CLAIM_VECTORS) / sizeof(REPLY_CLAIM_VECTORS[0]); ++i) {
         const reply_claim_vector *v = &REPLY_CLAIM_VECTORS[i];
-        CHECK(thalovant_reply_claimed(v->handled, v->failed, v->stages, v->count) == v->claimed);
+        /* Derive the assertion the way a real caller would: run the accessor
+           over each correlated event's frame, not a transcribed bit, so a
+           vectors edit that changes `metas` without changing `expected` would
+           be caught here exactly like the skill-id derivation above. */
+        bool asserted = false;
+        for (size_t f = 0; f < v->frames; ++f) {
+            if (thalovant_ask_event_claim_asserted(v->frame[f], strlen(v->frame[f]), "r")) {
+                asserted = true;
+            }
+        }
+        CHECK(thalovant_reply_claimed_with_meta(v->handled, v->failed, v->stages, v->count, asserted)
+            == v->claimed);
+        /* thalovant_reply_claimed is thalovant_reply_claimed_with_meta with no
+           assertion, unconditionally -- not just on these vectors -- so a
+           caller who never learned about 0.9.2 keeps its exact prior answer. */
+        CHECK(thalovant_reply_claimed(v->handled, v->failed, v->stages, v->count)
+            == thalovant_reply_claimed_with_meta(v->handled, v->failed, v->stages, v->count, false));
     }
     CHECK(!thalovant_reply_claimed(true, false, NULL, 1));
     CHECK(thalovant_reply_claimed(true, false, NULL, 0));
+    /* A claim asserted on a failed reply never rescues it, and asserting on a
+       plain intent reply is a no-op: both already covered by the vectors loop
+       above via "assertion-cannot-rescue-a-failed-reply" and
+       "assertion-on-an-intent-reply-is-a-no-op", spelled out here too since
+       they are the two invariants the porting notes call out explicitly. */
+    const char *fallback_stage = "ovos-fallback-pipeline-plugin";
+    CHECK(!thalovant_reply_claimed_with_meta(true, true, &fallback_stage, 1, true));
+    CHECK(thalovant_reply_claimed_with_meta(true, false, &fallback_stage, 1, true));
+    CHECK(!thalovant_reply_claimed_with_meta(true, false, &fallback_stage, 1, false));
+
+    /* thalovant_ask_event_claim_asserted itself: only a literal JSON `true`
+       under payload.data.meta.thalovant_claimed counts. */
+    CHECK(thalovant_ask_event_claim_asserted(
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":true}},\"context\":{\"request_id\":\"r\"}}}",
+        strlen("{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":true}},\"context\":{\"request_id\":\"r\"}}}"),
+        "r"));
+    CHECK(!thalovant_ask_event_claim_asserted(
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":false}},\"context\":{\"request_id\":\"r\"}}}",
+        strlen("{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":false}},\"context\":{\"request_id\":\"r\"}}}"),
+        "r"));
+    CHECK(!thalovant_ask_event_claim_asserted(
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":\"true\"}},\"context\":{\"request_id\":\"r\"}}}",
+        strlen("{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":\"true\"}},\"context\":{\"request_id\":\"r\"}}}"),
+        "r"));
+    CHECK(!thalovant_ask_event_claim_asserted(
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\"},\"context\":{\"request_id\":\"r\"}}}",
+        strlen("{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\"},\"context\":{\"request_id\":\"r\"}}}"),
+        "r"));
+    CHECK(!thalovant_ask_event_claim_asserted(
+        "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":true}},\"context\":{\"request_id\":\"r\"}}}",
+        strlen("{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\",\"meta\":{\"thalovant_claimed\":true}},\"context\":{\"request_id\":\"r\"}}}"),
+        "other"));
+
     char out[64];
     const char *frame = "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"speak\",\"data\":{\"utterance\":\"x\"},\"context\":{\"request_id\":\"r\",\"pipeline_id\":\"ovos-fallback-pipeline-plugin\",\"skill_id\":\"weather.skill\"}}}";
     CHECK_INT_EQ(thalovant_ask_event_pipeline_id(frame, strlen(frame), "r", out, sizeof(out)), 29);
