@@ -118,12 +118,26 @@ int thalovant_ask_event_pipeline_id(const char *frame, size_t len, const char *r
     char *out, size_t cap);
 int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *request_id,
     char *out, size_t cap);
+/* True only when a correlated speak-shaped event carries a literal JSON
+ * `true` under payload.data.meta.thalovant_claimed. Any other value there
+ * (false, a string, a number, an absent meta object, or an unrelated/
+ * malformed frame) reads as false: this accessor never propagates a decode
+ * error into thalovant_reply_claimed_with_meta, it just declines to assert. */
+bool thalovant_ask_event_claim_asserted(const char *frame, size_t len, const char *request_id);
 /* Advisory reply claim: false for failed/unhandled or fallback-only replies;
  * true for successful replies with a non-fallback stage or no nonempty stamps.
  * NULL/empty entries are ignored. A NULL array with nonzero count fails closed.
  * IDs and array storage remain caller-owned; this is not origin verification. */
 bool thalovant_reply_claimed(bool handled, bool has_failure,
     const char *const *pipeline_ids, size_t pipeline_count);
+/* Same as thalovant_reply_claimed, plus an opt-in positive signal: when a
+ * skill's own speak event asserted the claim (thalovant_ask_event_claim_asserted
+ * on any correlated event for this reply), a successful, handled reply reads
+ * as claimed even from a fallback-only stage -- the case a fleet's generic
+ * "nothing matched" fallback skill never sets. Checked after the handled/
+ * has_failure guard, so an assertion can never rescue a failed reply. */
+bool thalovant_reply_claimed_with_meta(bool handled, bool has_failure,
+    const char *const *pipeline_ids, size_t pipeline_count, bool claim_asserted);
 
 /*
  * What the hub said when it refused, and whose refusal it is.

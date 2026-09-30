@@ -475,6 +475,22 @@ int thalovant_ask_event_skill_id(const char *frame, size_t len, const char *requ
     return event_context_identifier(frame, len, request_id, "skill_id", out, cap);
 }
 
+bool thalovant_ask_event_claim_asserted(const char *frame, size_t len, const char *request_id)
+{
+    thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
+    thalovant_ask_kind kind;
+    int count = event_tokens(frame, len, request_id, tokens, &kind);
+    if (count < 0) return false;
+    int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
+    int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
+    int meta = thalovant_json_object_get(frame, tokens, count, data, "meta");
+    if (meta < 0 || tokens[meta].type != THALOVANT_JSON_OBJECT) return false;
+    int value = thalovant_json_object_get(frame, tokens, count, meta, "thalovant_claimed");
+    if (value < 0 || tokens[value].type != THALOVANT_JSON_PRIMITIVE) return false;
+    size_t size = (size_t)(tokens[value].end - tokens[value].start);
+    return size == 4 && memcmp(frame + tokens[value].start, "true", 4) == 0;
+}
+
 /* A whole, non-negative count from a JSON number or numeric string, or 0. */
 static int64_t refusal_count(const char *frame, const thalovant_json_tok *tokens, int count, int object,
     const char *field)
@@ -598,8 +614,15 @@ bool thalovant_refusal_belongs_to_ask(const char *request_id, const char *own_re
 bool thalovant_reply_claimed(bool handled, bool has_failure,
     const char *const *pipeline_ids, size_t pipeline_count)
 {
+    return thalovant_reply_claimed_with_meta(handled, has_failure, pipeline_ids, pipeline_count, false);
+}
+
+bool thalovant_reply_claimed_with_meta(bool handled, bool has_failure,
+    const char *const *pipeline_ids, size_t pipeline_count, bool claim_asserted)
+{
     bool stamped = false;
     if (!handled || has_failure || (pipeline_ids == NULL && pipeline_count != 0)) return false;
+    if (claim_asserted) return true;
     for (size_t i = 0; i < pipeline_count; ++i) {
         const char *stage = pipeline_ids[i];
         if (stage == NULL || stage[0] == '\0') continue;

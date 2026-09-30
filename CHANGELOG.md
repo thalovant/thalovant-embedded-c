@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.2 — unreleased
+
+- `thalovant_reply_claimed_with_meta()` lets a skill positively claim a fallback-tier answer. `thalovant_reply_claimed()` treated every fallback-stage reply as "nothing matched," because OVOS's own fallback priority band puts a skill that vocabulary-gates its own narrow answers in the same tier as the fleet's generic catch-all -- `pipeline_id` alone cannot tell them apart. A skill's own `speak` event may now carry `data.meta.thalovant_claimed = true`; the new `thalovant_ask_event_claim_asserted()` reads that literal-`true` signal off a correlated event, and `thalovant_reply_claimed_with_meta()` checks it first, before the existing pipeline-tier heuristic, and after the handled/failed guard so it can never rescue a failed reply. `thalovant_reply_claimed()` keeps its exact prior signature and behavior, calling the new function with no assertion.
+- Acknowledges parity reference `50d65c1596a9` (thalovant-python-sdk 0.9.2, not yet merged to `main`; recorded ahead of it as a coordinated additive rollout per `contracts/README.md`). `reply-claim-vectors.json` re-vendored with its new `metas` array and seven new cases; `tools/generate-reply-claim-vectors.mjs` now also emits one bus frame per context carrying that context's meta, so the C tests derive claim assertion through the real accessor rather than a transcribed bit.
+
 ## 0.7.1 — 2026-09-28
 
 - `docs/noise-v3.md` no longer tells callers never to "retry with weaker authentication on a failed handshake". That contradicted the KK-then-XX rule every SDK follows. When a pinned KK attempt is refused (the hub closes with 1000, 1008 or no status during it) or its answer does not authenticate, the caller opens one new connection at once and uses XX. A KK attempt that only ran out of time is not retried. The pin is still checked when XX completes, so it is not weaker, and only XX tells a changed password from a changed hub key. The page now says how to do it with `thalovant_noise_select` and `thalovant_noise_init`.
