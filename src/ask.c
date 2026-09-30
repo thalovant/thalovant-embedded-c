@@ -480,7 +480,7 @@ bool thalovant_ask_event_claim_asserted(const char *frame, size_t len, const cha
     thalovant_json_tok tokens[THALOVANT_WIRE_MAX_TOKENS];
     thalovant_ask_kind kind;
     int count = event_tokens(frame, len, request_id, tokens, &kind);
-    if (count < 0) return false;
+    if (count < 0 || kind != THALOVANT_ASK_SPEAK) return false;
     int payload = thalovant_json_object_get(frame, tokens, count, 0, "payload");
     int data = thalovant_json_object_get(frame, tokens, count, payload, "data");
     int meta = thalovant_json_object_get(frame, tokens, count, data, "meta");

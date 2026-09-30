@@ -59,30 +59,35 @@ for (const row of vectors.cases) {
 // the shared cases instead of one hand-written frame. Without this the header
 // carried pipeline ids only, and `expected.skill_ids` could be edited to
 // anything without a C test noticing.
-const frameFor = (context, meta) => JSON.stringify(JSON.stringify({
+const frameFor = (context, meta, name) => JSON.stringify(JSON.stringify({
   msg_type: "bus",
   payload: {
-    type: "speak",
+    type: name ?? "speak",
     data: meta !== undefined && meta !== null ? { utterance: "x", meta } : { utterance: "x" },
     context: { request_id: "r", ...context },
   },
 }));
 
 // One frame per context, carrying that context's `metas` entry (0.9.2) on
-// `data.meta` when present. The C test runs thalovant_ask_event_claim_asserted
-// over these -- the same accessor a real caller would use -- and ORs the
-// result into thalovant_reply_claimed_with_meta, rather than trusting a
-// pre-computed "was this asserted" bit that could drift from the vectors.
+// `data.meta` when present, and that context's `names` entry (0.9.2) as the
+// frame's payload.type when present -- an absent/null entry means "speak",
+// so a case can represent a claim asserted on some other event kind (for
+// example ovos.utterance.handled) and prove the accessor rejects it. The C
+// test runs thalovant_ask_event_claim_asserted over these -- the same
+// accessor a real caller would use -- and ORs the result into
+// thalovant_reply_claimed_with_meta, rather than trusting a pre-computed
+// "was this asserted" bit that could drift from the vectors.
 const metaFramesFor = (row) => {
   const metas = row.metas ?? row.contexts.map(() => null);
-  return row.contexts.map((context, i) => frameFor(context, metas[i]));
+  const names = row.names ?? row.contexts.map(() => null);
+  return row.contexts.map((context, i) => frameFor(context, metas[i], names[i]));
 };
 
 const skillCases = vectors.cases.filter((row) => Array.isArray(row.expected.skill_ids));
 const widestSkillFrames = Math.max(1, ...skillCases.map((row) => row.contexts.length));
 const widestSkills = Math.max(1, ...skillCases.map((row) => skills(row).length));
 const skillLines = skillCases.map((row) => {
-  const frames = row.contexts.map(frameFor).join(", ");
+  const frames = metaFramesFor(row).join(", ");
   const ids = skills(row);
   const listed = ids.length ? ids.map((id) => JSON.stringify(id)).join(", ") : "NULL";
   return `    {${row.contexts.length}, {${frames || "NULL"}}, ${ids.length}, {${listed}}},`;
