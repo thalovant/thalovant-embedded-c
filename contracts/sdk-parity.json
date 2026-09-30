@@ -58,8 +58,8 @@
     },
     "refusal": {
       "implementation": {
-        "include/thalovant/ask.h": "0fe82749f330e1b7c43cb58547d7c161e860fdc5397c2d971ec6c833905604fc",
-        "src/ask.c": "b6347ff2d1623b4959d557adc945207dc39860a4e329c261417dec840954cb16"
+        "include/thalovant/ask.h": "9feaae1e670f8bb0df169c76b80fb5e43f38e6b5bbf167c1a8a2fa0d80c09422",
+        "src/ask.c": "52c49b69af791cdce3bc788a9e149e38fcddc47335b2e14a38ef161ca5f56943"
       },
       "reason": "thalovant_ask_refusal() and thalovant_ask_refusal_allowed() read a denial into caller-owned bounded buffers, including the quota numbers a spent allowance sends; thalovant_refusal_belongs_to_ask() is the shared correlation rule, with the in-flight counts caller-owned as correlation ids already are -- this library owns no sockets and no ask loop, so where a caller starts an untracked send's grace window is the caller's own. An unanswered question is already its own kind (THALOVANT_ASK_INTENT_FAILURE) and is asserted never to read as a refusal. tests/refusal_vectors.h is generated from the shared vectors by tools/generate-refusal-vectors.mjs, which CI re-checks.",
       "status": "required",
