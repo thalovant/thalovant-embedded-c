@@ -1,187 +1,25 @@
 # Thalovant Embedded C Client
 
+[![CI](https://github.com/thalovant/thalovant-embedded-c/actions/workflows/ci.yml/badge.svg)](https://github.com/thalovant/thalovant-embedded-c/actions/workflows/ci.yml)
+[![Licence](https://img.shields.io/github/license/thalovant/thalovant-embedded-c)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-docs.thalovant.com-5c6bc0)](https://docs.thalovant.com/developers/sdks/embedded-c/)
+
 Protocol glue for building Thalovant/HiveMind satellite devices in pure C99
 — ESP32/ESP-IDF, Zephyr, bare-metal, or Linux SBCs.
 
-This library is **transport-agnostic**: you bring your own MQTT client
-(esp-mqtt, Eclipse Paho embedded, ...) and/or WebSocket client
-(libwebsockets, esp_websocket_client, ...). The library provides everything
-protocol-specific:
+The library is transport-agnostic: you bring your own MQTT and/or WebSocket
+client and TLS stack, and it provides identity parsing, topics, encryption,
+wire framing and the ask and intent helpers. The core paths never allocate,
+with zero external dependencies.
 
-- **`thalovant_identity`** — parser for the identity JSON issued by the
-  Thalovant API (access key, crypto key, site id, hub endpoints, MQTT
-  broker credentials), accepting the same field aliases as the Node and Go
-  SDKs.
-- **`thalovant_topics`** — MQTT in/out/status topic derivation from the
-  identity's `topic_prefix` (trimmed and validated: wildcards and control
-  characters are rejected, oversized topics never silently truncate), plus
-  connection endpoint/port parsing and client-id derivation.
-- **`thalovant_noise`** — HiveMind v3 XXpsk2/KKpsk0, X25519,
-  AES-256-GCM, SHA-256/HKDF and the exact Argon2id PSK derivation. Ordered
-  encrypted frames and chunk sequencing fail closed. Static identity and hub
-  pins persist in caller storage; the core never allocates. See the
-  [v3 integration guide](docs/noise-v3.md).
-- **`thalovant_aes_gcm`** — self-contained AES-128-GCM (16-byte HiveMind
-  nonces and 12-byte legacy nonces) with constant-time tag verification,
-  validated against NIST vectors and known-answer vectors generated with
-  Node's `crypto` module.
-- **`thalovant_wire`** — HiveMessage frame build/parse (explicit nulls,
-  byte-comparable with the Node SDK), the `{ciphertext,tag,nonce}` JSON
-  envelope with hex/Base64 auto-detection, the binary MQTT envelope and
-  binary frame codec, the WSS `authorization` query-parameter builder, and
-  the preshared-key handshake/hello helpers.
-- **`thalovant_ask`** — builders for `recognizer_loop:utterance` frames with
-  request/session correlation, and a classifier for the reply frames
-  (speak / handled / complete_intent_failure / ovos.intent.unmatched /
-  policy denied / query timeout) so you can run the ask loop on your own event loop.
-- **`thalovant_intents`** — the intent inventory: builders for
-  `ovos.intent.list` (what the hub can be asked, per language) and
-  `ovos.intent.describe` (the sentences behind one intent, `{slot}`
-  placeholders included), a classifier for their replies and for
-  `hive.policy.denied`, and streaming walkers that deliver each row,
-  definition, sample sentence and allowed message type through a callback —
-  a manifest of any size in bounded memory, over the satellite's own session
-  with no control-plane credential. The connection's allow-list needs
-  `ovos.intent.list` to read the manifest, and `ovos.intent.describe` only
-  when you go on to ask for the sentences behind a registration.
-- A small in-repo JSON tokenizer (`thalovant_json`) with shallow scans for
-  payloads larger than a token pool, and hex/Base64 codecs — **zero
-  external dependencies, zero third-party code**.
+## Requirements
 
-The core paths never allocate: every function writes into caller-provided
-buffers, with all size limits tunable through `include/thalovant/config.h`
-defines.
+A C99 compiler (gcc or clang). Your own MQTT or WebSocket client and TLS stack.
 
-## What the integrator brings
+## Install
 
-| You provide                   | The library provides                       |
-| ----------------------------- | ------------------------------------------ |
-| MQTT and/or WebSocket client  | topics, endpoints, frame/envelope codecs   |
-| TLS stack                     | `tls` flag + scheme/port parsing           |
-| Random number generator       | (nonces are always caller-supplied)        |
-| Event loop / timers           | frame classifier + ask-loop semantics      |
-| Identity JSON storage         | identity parser                            |
-
-## HiveMind v3 integration
-
-New integrations use [the Noise v3 guide](docs/noise-v3.md). Select a mutually
-advertised suite and pattern, run the handshake before declaring readiness,
-then wrap application JSON in ordered Noise binary frames. This library
-supports `25519_AESGCM_SHA256`; a ChaChaPoly-only offer is rejected.
-
-The optional in-tree Argon2id derivation needs 64 MiB of caller scratch.
-Smaller devices may provision the exact prederived PSK securely; they must
-still persist a static X25519 key, verify the hub pin, and generate a fresh
-ephemeral key for every connection. The library adds no socket or broker.
-
-## Legacy v2 sketch (MQTT)
-
-The following retained helpers apply only to legacy v2 hubs. Their
-`crypto_key` envelope is incompatible with a v3-only listener. Run these
-fragments inside your adapter callbacks, returning before publication whenever
-a builder or codec fails.
-
-```c
-#include "thalovant/thalovant.h"
-
-thalovant_identity identity;
-thalovant_identity_parse(identity_json, identity_len, &identity);
-
-thalovant_mqtt_topics topics;
-thalovant_mqtt_topics_derive(&identity, &topics);
-
-uint8_t key[16];
-thalovant_crypto_runtime_key(identity.crypto_key, key);
-
-/* connect your MQTT client to the derived endpoint...            */
-/* subscribe topics.outbound; publish "online" retained on topics.status */
-
-/* send an utterance */
-char frame[1024];
-thalovant_ask_request ask = { "what time is it", "en-us",
-                              "sess-1", identity.site_id, "req-1" };
-int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
-if (frame_len < 0) {
-    return; /* frame[] too small or invalid input: send nothing */
-}
-
-uint8_t nonce[16];   /* fill from your RNG — never reuse */
-uint8_t sealed[1100];
-size_t sealed_len;
-if (thalovant_envelope_encrypt_binary(key, nonce, (uint8_t *)frame,
-                                     (size_t)frame_len, sealed, sizeof(sealed),
-                                     &sealed_len) != THALOVANT_OK) {
-    return; /* sealing failed: never publish an incomplete buffer */
-}
-/* publish sealed on topics.inbound ... */
-
-/* classify replies arriving on topics.outbound */
-thalovant_ask_event event;
-thalovant_ask_classify(plaintext, plaintext_len, "req-1", &event);
-if (event.kind == THALOVANT_ASK_SPEAK) { /* speak event.text */ }
-```
-
-## What can be said (intent inventory)
-
-The following fragments run inside your adapter callbacks. Every concurrently
-active request needs a distinct request ID and its own response state. The
-library classifies the IDs you provide; it does not allocate or reserve them.
-Use a fresh ID for each later logical operation, including after cancellation,
-so delayed remote frames cannot match a new request.
-
-```c
-/* one query in flight: its id, and whether its reply has been taken.
- * Keep one of these per query -- a shared flag would let one query's
- * reply suppress another's. */
-struct inventory_query { const char *request_id; bool answered; };
-
-/* ask the hub's intent manifest for one language */
-struct inventory_query query = { "req-2", false };   /* both set together */
-thalovant_intent_list_request list = { "en-us", "sess-1", identity.site_id,
-                                       query.request_id, false };
-if (thalovant_intent_list_build_frame(&list, frame, sizeof(frame)) < 0) {
-    return; /* frame[] too small or invalid input: nothing was built to send */
-}
-/* seal and publish as above */
-
-/* each reply frame: rows stream through a callback, one at a time */
-static bool on_row(const thalovant_intent_registration *row, void *user)
-{
-    printf("%s:%s (%s)\n", row->skill_id, row->intent_name, row->lang);
-    return true;                      /* false stops the walk */
-}
-
-thalovant_intent_event reply;
-thalovant_intent_classify(plaintext, plaintext_len, query.request_id, &reply);
-switch (reply.kind) {
-case THALOVANT_INTENT_LIST_RESPONSE:
-    if (query.answered) break;        /* the hub delivers every reply twice */
-    query.answered = true;
-    /* the row count, or < 0: THALOVANT_ERR_HUB_REFUSED when the listing
-     * said ok:false (reply.error carries the hub's words) -- a refused
-     * listing is not an empty hub, so say so rather than showing a device
-     * that can do nothing */
-    if (thalovant_intent_list_rows(&reply, on_row, NULL) < 0) { /* ... */ }
-    break;
-case THALOVANT_INTENT_POLICY_DENIED:  /* reply.denied_type names the query */
-    /* thalovant_intent_allowed_types() walks the types it may publish */
-    break;
-default: break;                       /* THALOVANT_INTENT_IGNORE */
-}
-
-/* the sentences behind one intent: ovos.intent.describe, then
- * thalovant_intent_definitions() and thalovant_intent_samples() on the
- * reply -- see docs/esp32-mqtt.md section 6 */
-```
-
-Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md) and
-[docs/linux-websocket.md](docs/linux-websocket.md).
-
-## Getting a release
-
-Integrators vendor the library or fetch it by an immutable release tag
-(current: `v0.7.2`) — as a git submodule, via CMake `FetchContent`, as an
-ESP-IDF component ref, or in a Zephyr west manifest:
+Vendor the library or fetch it by an immutable release tag (current:
+`v0.7.2`):
 
 ```sh
 # git submodule
@@ -190,24 +28,26 @@ git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
 git -C third_party/thalovant-embedded-c checkout v0.7.2
 ```
 
-```cmake
-# CMake FetchContent
-FetchContent_Declare(thalovant
-  GIT_REPOSITORY https://github.com/thalovant/thalovant-embedded-c.git
-  GIT_TAG        v0.7.2)
-```
+CMake `FetchContent`, ESP-IDF component refs and Zephyr west manifests work
+the same way with the same tag. To embed it in your own build system, compile
+`src/*.c` with `-Iinclude`.
 
-Every GitHub release also carries a reproducible source archive
-(`thalovant-embedded-c-<version>.tar.gz`), a CycloneDX SBOM, and a
-`SHA256SUMS` file. The archive and SBOM are attested with GitHub Actions
-provenance; verify with:
+## Quick start
 
-```sh
-gh attestation verify thalovant-embedded-c-<version>.tar.gz \
-    --repo thalovant/thalovant-embedded-c
-```
+New integrations use the Noise v3 transport. Follow the
+[Noise v3 guide](docs/noise-v3.md) for the handshake and the first request, and
+the [documentation](https://docs.thalovant.com/developers/sdks/embedded-c/) for
+identity parsing, topics, intents and fallback handlers.
 
-## Building
+## Documentation
+
+| Topic | Where |
+| ----- | ----- |
+| Overview, what the library provides, what you bring, releases, integration sketch | [Embedded C Library](https://docs.thalovant.com/developers/sdks/embedded-c/) |
+| Intent inventory, fallback handlers, request hints, audio, reply claims | [Embedded C Library](https://docs.thalovant.com/developers/sdks/embedded-c/) |
+| Everything else | [docs.thalovant.com](https://docs.thalovant.com) |
+
+## Development
 
 ```sh
 make            # build/libthalovant.a
@@ -216,70 +56,29 @@ make fuzz       # Clang/libFuzzer, ASan + UBSan; default 60 seconds
 make CC=clang test
 ```
 
-Requires only a C99 compiler; builds warning-free with
-`-Wall -Wextra -Werror -pedantic` on gcc and clang. To embed in your own
-build system, compile `src/*.c` with `-Iinclude`.
+Builds warning-free with `-Wall -Wextra -Werror -pedantic` on gcc and clang.
+Every GitHub release carries a source archive, a CycloneDX SBOM and a
+`SHA256SUMS` file. The archive carries two GitHub Actions attestations, one for
+provenance and one for the SBOM. Download the three files, then verify them:
 
-## Fallback handlers and language discovery
+```sh
+# provenance of the archive
+gh attestation verify thalovant-embedded-c-<version>.tar.gz \
+    --repo thalovant/thalovant-embedded-c
 
-`thalovant_fallback_list_build_frame` builds `ovos.skills.fallback.list` on the
-same session as the intent queries. The classifier returns
-`THALOVANT_FALLBACK_LIST_RESPONSE`, with `items_json` pointing to the raw
-`fallbacks` array. Walk it with the JSON scanners to read each `skill_id` and
-`priority`; the integrator owns conversion and sorting.
+# the archive's CycloneDX SBOM attestation
+gh attestation verify thalovant-embedded-c-<version>.tar.gz \
+    --repo thalovant/thalovant-embedded-c \
+    --predicate-type https://cyclonedx.org/bom
 
-A successful response carrying `[]` means no registered fallback handlers.
-An absent array, policy refusal, or timeout means unknown. An empty intent
-manifest alone cannot prove the hub cannot answer a language: fallback
-handlers register no intent phrases. Treat enabled phrases, any fallback, or
-unknown fallbacks as evidence that the hub may answer; this is not a language
-support guarantee.
+# the checksums of the archive and the SBOM
+sha256sum --check SHA256SUMS
+```
 
-When the intent listing is refused or silent, an integrator may query the
-Adapt and Padatious engine manifests for names only. Keep that result marked
-as `engine-manifests`; a timeout is not proof of policy denial. Networking,
-deadlines, event correlation, and aggregate results remain caller-owned.
+## Security
 
-The CI fuzz target mutates JSON, identity, wire, ask, intent and codec inputs,
-including short output buffers, under fatal address and undefined-behavior
-sanitizers. Reproduce with `make fuzz FUZZ_SECONDS=120`. Inputs and crash
-artifacts stay under `build/`; the core library gains no dependency.
+See [SECURITY.md](https://github.com/thalovant/.github/blob/main/SECURITY.md).
 
-## Request hints, examples, and embedded skill audio
-
-`thalovant_ask_build_payload_with_hints` and `thalovant_ask_build_frame_with_hints`
-accept `thalovant_ask_hints`: `stt_lang`, a JSON string array `pipeline_json`,
-and a JSON object `location_json`. Language and pipeline stages are trimmed;
-empty stages are omitted. Build the location object with
-`thalovant_build_location`; a city is required and invalid/zero coordinates are
-omitted. Existing builders retain their original wire bytes.
-
-The complete frame uses the caller's output buffer directly. Each decoded
-pipeline stage must fit `THALOVANT_ASK_TEXT_MAX` including its terminator;
-hint JSON must fit `THALOVANT_WIRE_MAX_TOKENS`. These compile-time limits keep
-the tokenizer and normalization buffers bounded without dynamic allocation.
-
-`thalovant_speakable` renders an intent pattern into a caller-owned buffer with
-optional `thalovant_speakable_slot` replacements. Rank rendered examples using
-the original pattern's slot presence, retain the best rank when deduplicating,
-and apply the requested limit afterward.
-
-`thalovant_ask_classify` recognizes `THALOVANT_ASK_AUDIO` without marking it a
-failure. Audio never settles or extends an ask: retain its order alongside speech
-within the existing reply window. `thalovant_ask_event_language` returns the
-first nonempty language from event data, context, or session.
-`thalovant_ask_audio_decode` validates correlation and decodes only embedded
-hexadecimal audio into caller-owned storage; scratch space holds the unescaped
-hex string. It never reads a file or URL. Check its returned length/error before
-playing bytes. Buffer limits may be smaller than the 4 MiB clip maximum.
-
-Zero-initialize `thalovant_audio_budget` for each reply and call
-`thalovant_audio_budget_accept` before retaining encoded audio. It caps each
-clip at 4 MiB and all reply clips at 16 MiB (encoded upper bounds); rejected
-clips increment `dropped` and do not affect speech collection. Deduplicate
-transport deliveries before collection. The library remains transport-agnostic;
-control-plane skill/configuration management belongs to managed SDK clients.
-
-## License
+## Licence
 
 MIT — see [LICENSE](LICENSE).
