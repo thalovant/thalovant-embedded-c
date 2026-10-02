@@ -19,13 +19,13 @@ A C99 compiler (gcc or clang). Your own MQTT or WebSocket client and TLS stack.
 ## Install
 
 Vendor the library or fetch it by an immutable release tag (current:
-`v0.7.2`):
+`v0.7.3`):
 
 ```sh
 # git submodule
 git submodule add https://github.com/thalovant/thalovant-embedded-c.git \
     third_party/thalovant-embedded-c
-git -C third_party/thalovant-embedded-c checkout v0.7.2
+git -C third_party/thalovant-embedded-c checkout v0.7.3
 ```
 
 CMake `FetchContent`, ESP-IDF component refs and Zephyr west manifests work

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.3 - 2026-10-02
+
+- Automated patch release of the unreleased changes on `main` since v0.7.2.
+
 ## 0.7.2 — unreleased
 
 - `thalovant_reply_claimed_with_meta()` lets a skill positively claim a fallback-tier answer. `thalovant_reply_claimed()` treated every fallback-stage reply as "nothing matched," because OVOS's own fallback priority band puts a skill that vocabulary-gates its own narrow answers in the same tier as the fleet's generic catch-all -- `pipeline_id` alone cannot tell them apart. A skill's own `speak` event may now carry `data.meta.thalovant_claimed = true`; the new `thalovant_ask_event_claim_asserted()` reads that literal-`true` signal off a correlated event, and `thalovant_reply_claimed_with_meta()` checks it first, before the existing pipeline-tier heuristic, and after the handled/failed guard so it can never rescue a failed reply. `thalovant_reply_claimed()` keeps its exact prior signature and behavior, calling the new function with no assertion.
