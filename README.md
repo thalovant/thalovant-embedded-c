@@ -29,39 +29,15 @@ git -C third_party/thalovant-embedded-c checkout v0.7.2
 ```
 
 CMake `FetchContent`, ESP-IDF component refs and Zephyr west manifests work
-the same way with the same tag. To embed
-in your own build system, compile `src/*.c` with `-Iinclude`.
+the same way with the same tag. To embed it in your own build system, compile
+`src/*.c` with `-Iinclude`.
 
 ## Quick start
 
-This is the legacy v2 MQTT sketch; new integrations use the Noise v3 guide
-([docs/noise-v3.md](docs/noise-v3.md)).
-
-```c
-#include "thalovant/thalovant.h"
-
-thalovant_identity identity;
-thalovant_identity_parse(identity_json, identity_len, &identity);
-
-thalovant_mqtt_topics topics;
-thalovant_mqtt_topics_derive(&identity, &topics);
-
-uint8_t key[16];
-thalovant_crypto_runtime_key(identity.crypto_key, key);
-
-/* send an utterance */
-char frame[1024];
-thalovant_ask_request ask = { "what time is it", "en-us",
-                              "sess-1", identity.site_id, "req-1" };
-int frame_len = thalovant_ask_build_frame(&ask, frame, sizeof(frame));
-if (frame_len < 0) {
-    return; /* frame[] too small or invalid input: send nothing */
-}
-```
-
-Full walkthroughs: [docs/esp32-mqtt.md](docs/esp32-mqtt.md),
-[docs/linux-websocket.md](docs/linux-websocket.md) and
-[docs/noise-v3.md](docs/noise-v3.md).
+New integrations use the Noise v3 transport. Follow the
+[Noise v3 guide](docs/noise-v3.md) for the handshake and the first request, and
+the [documentation](https://docs.thalovant.com/developers/sdks/embedded-c/) for
+identity parsing, topics, intents and fallback handlers.
 
 ## Documentation
 
