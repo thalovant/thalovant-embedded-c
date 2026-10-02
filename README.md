@@ -58,12 +58,21 @@ make CC=clang test
 
 Builds warning-free with `-Wall -Wextra -Werror -pedantic` on gcc and clang.
 Every GitHub release carries a source archive, a CycloneDX SBOM and a
-`SHA256SUMS` file; the archive and SBOM are attested with GitHub Actions
-provenance:
+`SHA256SUMS` file. The archive carries two GitHub Actions attestations, one for
+provenance and one for the SBOM. Download the three files, then verify them:
 
 ```sh
+# provenance of the archive
 gh attestation verify thalovant-embedded-c-<version>.tar.gz \
     --repo thalovant/thalovant-embedded-c
+
+# the archive's CycloneDX SBOM attestation
+gh attestation verify thalovant-embedded-c-<version>.tar.gz \
+    --repo thalovant/thalovant-embedded-c \
+    --predicate-type https://cyclonedx.org/bom
+
+# the checksums of the archive and the SBOM
+sha256sum --check SHA256SUMS
 ```
 
 ## Security
