@@ -72,7 +72,9 @@ static int append_json_string(char *out, size_t cap, size_t *pos, const char *te
 /*
  * The context every inventory query carries: the request id where ask()
  * puts it, the language beside it as the reference SDK sends it (the hub
- * echoes both), and the session the reply is answered over.
+ * echoes both), and the session the reply is answered over. A NULL `lang`
+ * leaves the language out of the context and the session alike, so the hub
+ * answers in its own.
  */
 static int append_context(char *out, size_t cap, size_t *pos, const char *lang,
                           const char *session_id, const char *site_id, const char *request_id)
@@ -82,37 +84,46 @@ static int append_context(char *out, size_t cap, size_t *pos, const char *lang,
     if ((rc = append_json_string(out, cap, pos, request_id)) != THALOVANT_OK) return rc;
     if ((rc = append(out, cap, pos, ",\"thalovant_request_id\":")) != THALOVANT_OK) return rc;
     if ((rc = append_json_string(out, cap, pos, request_id)) != THALOVANT_OK) return rc;
-    if ((rc = append(out, cap, pos, ",\"lang\":")) != THALOVANT_OK) return rc;
-    if ((rc = append_json_string(out, cap, pos, lang)) != THALOVANT_OK) return rc;
+    if (lang != NULL) {
+        if ((rc = append(out, cap, pos, ",\"lang\":")) != THALOVANT_OK) return rc;
+        if ((rc = append_json_string(out, cap, pos, lang)) != THALOVANT_OK) return rc;
+    }
     if ((rc = append(out, cap, pos, ",\"session\":{\"session_id\":")) != THALOVANT_OK) return rc;
     if ((rc = append_json_string(out, cap, pos, session_id)) != THALOVANT_OK) return rc;
     if (site_id != NULL) {
         if ((rc = append(out, cap, pos, ",\"site_id\":")) != THALOVANT_OK) return rc;
         if ((rc = append_json_string(out, cap, pos, site_id)) != THALOVANT_OK) return rc;
     }
-    if ((rc = append(out, cap, pos, ",\"lang\":")) != THALOVANT_OK) return rc;
-    if ((rc = append_json_string(out, cap, pos, lang)) != THALOVANT_OK) return rc;
+    if (lang != NULL) {
+        if ((rc = append(out, cap, pos, ",\"lang\":")) != THALOVANT_OK) return rc;
+        if ((rc = append_json_string(out, cap, pos, lang)) != THALOVANT_OK) return rc;
+    }
     if ((rc = append(out, cap, pos, ",\"request_id\":")) != THALOVANT_OK) return rc;
     if ((rc = append_json_string(out, cap, pos, request_id)) != THALOVANT_OK) return rc;
     return append(out, cap, pos, "}}}");
 }
 
-int thalovant_intent_list_build_payload(const thalovant_intent_list_request *request, char *out,
-                                        size_t cap)
+/* ovos.intent.list in `lang`, or with no language anywhere when it is NULL. */
+static int build_list_payload(const thalovant_intent_list_request *request, const char *lang,
+                              char *out, size_t cap)
 {
     if (request == NULL || out == NULL || request->session_id == NULL ||
         request->request_id == NULL || request->request_id[0] == '\0') {
         return THALOVANT_ERR_INVALID;
     }
-    const char *lang = request->lang != NULL ? request->lang : "en-us";
     size_t pos = 0;
     int rc;
     if ((rc = append(out, cap, &pos, "{\"type\":\"" THALOVANT_EVENT_INTENT_LIST
-                                     "\",\"data\":{\"lang\":")) != THALOVANT_OK)
+                                     "\",\"data\":{")) != THALOVANT_OK)
         return rc;
-    if ((rc = append_json_string(out, cap, &pos, lang)) != THALOVANT_OK) return rc;
+    if (lang != NULL) {
+        if ((rc = append(out, cap, &pos, "\"lang\":")) != THALOVANT_OK) return rc;
+        if ((rc = append_json_string(out, cap, &pos, lang)) != THALOVANT_OK) return rc;
+    }
     if (request->include_definitions) {
-        if ((rc = append(out, cap, &pos, ",\"include_definitions\":true")) != THALOVANT_OK)
+        if ((rc = append(out, cap, &pos, lang != NULL ? ",\"include_definitions\":true" :
+                                                       "\"include_definitions\":true")) !=
+            THALOVANT_OK)
             return rc;
     }
     if ((rc = append(out, cap, &pos, "}")) != THALOVANT_OK) return rc;
@@ -120,6 +131,41 @@ int thalovant_intent_list_build_payload(const thalovant_intent_list_request *req
                              request->request_id)) != THALOVANT_OK)
         return rc;
     return (int)pos;
+}
+
+/* A bus payload builder, wrapped into the HiveMessage frame. */
+typedef int (*payload_builder)(const thalovant_intent_list_request *request, char *out,
+                               size_t cap);
+
+static int build_frame(payload_builder build, const thalovant_intent_list_request *request,
+                       char *out, size_t cap)
+{
+    char payload[TLV_INTENT_PAYLOAD_CAP];
+    int rc = build(request, payload, sizeof(payload));
+    if (rc < 0) {
+        return rc;
+    }
+    thalovant_hive_message msg = { "bus", payload, NULL, NULL, NULL, NULL, NULL, NULL };
+    return thalovant_wire_serialize(&msg, out, cap);
+}
+
+int thalovant_intent_list_build_payload(const thalovant_intent_list_request *request, char *out,
+                                        size_t cap)
+{
+    const char *lang = request != NULL && request->lang != NULL ? request->lang : "en-us";
+    return build_list_payload(request, lang, out, cap);
+}
+
+int thalovant_intent_list_all_build_payload(const thalovant_intent_list_request *request,
+                                            char *out, size_t cap)
+{
+    return build_list_payload(request, NULL, out, cap);
+}
+
+int thalovant_intent_list_all_build_frame(const thalovant_intent_list_request *request,
+                                          char *out, size_t cap)
+{
+    return build_frame(thalovant_intent_list_all_build_payload, request, out, cap);
 }
 
 int thalovant_intent_list_build_frame(const thalovant_intent_list_request *request, char *out,
@@ -191,11 +237,28 @@ int thalovant_fallback_list_build_payload(const thalovant_intent_list_request *r
 int thalovant_fallback_list_build_frame(const thalovant_intent_list_request *request,
                                         char *out, size_t cap)
 {
-    char payload[TLV_INTENT_PAYLOAD_CAP];
-    int rc = thalovant_fallback_list_build_payload(request, payload, sizeof(payload));
-    if (rc < 0) return rc;
-    thalovant_hive_message msg = { "bus", payload, NULL, NULL, NULL, NULL, NULL, NULL };
-    return thalovant_wire_serialize(&msg, out, cap);
+    return build_frame(thalovant_fallback_list_build_payload, request, out, cap);
+}
+
+int thalovant_skills_list_build_payload(const thalovant_intent_list_request *request,
+                                        char *out, size_t cap)
+{
+    if (request == NULL || out == NULL || request->session_id == NULL ||
+        request->request_id == NULL || request->request_id[0] == '\0') {
+        return THALOVANT_ERR_INVALID;
+    }
+    size_t pos = 0;
+    int rc = append(out, cap, &pos, "{\"type\":\"" THALOVANT_EVENT_SKILLS_LIST "\",\"data\":{}");
+    if (rc != THALOVANT_OK) return rc;
+    rc = append_context(out, cap, &pos, NULL, request->session_id, request->site_id,
+                        request->request_id);
+    return rc == THALOVANT_OK ? (int)pos : rc;
+}
+
+int thalovant_skills_list_build_frame(const thalovant_intent_list_request *request, char *out,
+                                      size_t cap)
+{
+    return build_frame(thalovant_skills_list_build_payload, request, out, cap);
 }
 
 /* ------------------------------------------------------- field readers */
@@ -385,6 +448,8 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
         kind = THALOVANT_INTENT_POLICY_DENIED;
     } else if (thalovant_json_str_eq(frame_json, &type, THALOVANT_EVENT_FALLBACK_LIST_RESPONSE)) {
         kind = THALOVANT_FALLBACK_LIST_RESPONSE;
+    } else if (thalovant_json_str_eq(frame_json, &type, THALOVANT_EVENT_SKILLS_LIST_RESPONSE)) {
+        kind = THALOVANT_SKILLS_LIST_RESPONSE;
     } else {
         return THALOVANT_OK;
     }
@@ -433,6 +498,15 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
     if (rc < 0 && rc != THALOVANT_ERR_MISSING) {
         return rc;
     }
+    /* The session's own language, apart from the fallback chain above: the
+     * hub stamps it on a reply to a query that named no language. */
+    if (has_session) {
+        rc = read_optional_text(frame_json, &session, "lang", out->session_lang,
+                                sizeof(out->session_lang));
+        if (rc != THALOVANT_OK) {
+            return rc;
+        }
+    }
 
     if (kind == THALOVANT_INTENT_POLICY_DENIED) {
         out->ok = false;
@@ -474,9 +548,10 @@ int thalovant_intent_classify(const char *frame_json, size_t len, const char *re
             return rc;
         thalovant_json_tok items;
         const char *key = kind == THALOVANT_INTENT_LIST_RESPONSE ? "intents" :
-                          kind == THALOVANT_FALLBACK_LIST_RESPONSE ? "fallbacks" : "definitions";
+                          kind == THALOVANT_FALLBACK_LIST_RESPONSE ? "fallbacks" :
+                          kind == THALOVANT_SKILLS_LIST_RESPONSE ? "skills" : "definitions";
         if (read_container(frame_json, &data, key, THALOVANT_JSON_ARRAY, &items)) {
-            if (kind == THALOVANT_FALLBACK_LIST_RESPONSE) {
+            if (kind == THALOVANT_FALLBACK_LIST_RESPONSE || kind == THALOVANT_SKILLS_LIST_RESPONSE) {
                 /* Never advertise malformed fallback data as known empty. */
                 size_t cursor = 0;
                 thalovant_json_tok elem;
@@ -724,6 +799,141 @@ int thalovant_intent_samples(const char *definition_json, size_t len,
         }
     }
     return rc < 0 ? rc : delivered;
+}
+
+/* ------------------------------------------------------ fallback skills */
+
+/*
+ * 1 when an ovos.skills.list row is one of this hub's fallback skills, with
+ * its trimmed id in `id`; 0 to pass it over; negative on error. The rule is
+ * the reference's _fallbacks_from_skills: an object, a non-blank string
+ * skill_id, a session_id that is absent, null, "" or exactly "default", and
+ * a capabilities list holding the string "fallback".
+ */
+static int fallback_skill(const char *js, const thalovant_json_tok *row, char *id, size_t cap)
+{
+    id[0] = '\0';
+    if (row->type != THALOVANT_JSON_OBJECT) {
+        return 0;
+    }
+    thalovant_json_tok value;
+    if (thalovant_json_scan_key(js, row, "session_id", &value) == THALOVANT_OK) {
+        if (value.type == THALOVANT_JSON_STRING) {
+            /* Compared as sent, untrimmed: " default " is not the default
+             * session. A longer id cannot be "default" either. */
+            char session[sizeof("default")];
+            int n = thalovant_json_unescape(js, &value, session, sizeof(session));
+            if (n == THALOVANT_ERR_NOMEM) {
+                return 0;
+            }
+            if (n < 0) {
+                return n;
+            }
+            if (n != 0 && strcmp(session, "default") != 0) {
+                return 0;
+            }
+        } else if (!(value.type == THALOVANT_JSON_PRIMITIVE &&
+                     value.end - value.start == 4 && memcmp(js + value.start, "null", 4) == 0)) {
+            return 0;
+        }
+    }
+    thalovant_json_tok capabilities;
+    if (!read_container(js, row, "capabilities", THALOVANT_JSON_ARRAY, &capabilities)) {
+        return 0;
+    }
+    size_t cursor = 0;
+    thalovant_json_tok item;
+    bool fallback = false;
+    int rc;
+    while ((rc = thalovant_json_scan_next(js, &capabilities, &cursor, &item)) == 1) {
+        if (item.type == THALOVANT_JSON_STRING) {
+            char capability[sizeof(THALOVANT_FALLBACK_CAPABILITY)];
+            int n = thalovant_json_unescape(js, &item, capability, sizeof(capability));
+            if (n >= 0 && strcmp(capability, THALOVANT_FALLBACK_CAPABILITY) == 0) {
+                fallback = true;
+                break;
+            }
+            if (n < 0 && n != THALOVANT_ERR_NOMEM) {
+                return n;
+            }
+        }
+    }
+    if (rc < 0) {
+        return rc;
+    }
+    if (!fallback) {
+        return 0;
+    }
+    if (thalovant_json_scan_key(js, row, "skill_id", &value) != THALOVANT_OK ||
+        value.type != THALOVANT_JSON_STRING) {
+        return 0;
+    }
+    int n = thalovant_json_as_string(js, &value, id, cap);
+    if (n < 0) {
+        return n;
+    }
+    return n > 0 ? 1 : 0;
+}
+
+int thalovant_skills_fallbacks(const thalovant_intent_event *event,
+                               thalovant_hub_fallback_fn fn, void *user)
+{
+    if (event == NULL || fn == NULL) {
+        return THALOVANT_ERR_INVALID;
+    }
+    if (event->kind == THALOVANT_INTENT_POLICY_DENIED) {
+        return THALOVANT_ERR_POLICY_DENIED;
+    }
+    if (event->kind != THALOVANT_SKILLS_LIST_RESPONSE) {
+        return THALOVANT_ERR_INVALID;
+    }
+    if (!event->ok) {
+        return THALOVANT_ERR_HUB_REFUSED;
+    }
+    if (event->items_json == NULL) {
+        return THALOVANT_ERR_MISSING;
+    }
+    const char *js = event->items_json;
+    thalovant_json_tok rows = { THALOVANT_JSON_ARRAY, 0, (int)event->items_len, event->count, -1 };
+    /* Sorted and de-duplicated without a list to sort: each pass delivers
+     * the smallest id above the one delivered before it. */
+    thalovant_hub_fallback found;
+    char last[THALOVANT_INTENT_SKILL_ID_MAX];
+    bool have_last = false;
+    int delivered = 0;
+    for (;;) {
+        bool have_next = false;
+        size_t cursor = 0;
+        thalovant_json_tok row;
+        int rc;
+        while ((rc = thalovant_json_scan_next(js, &rows, &cursor, &row)) == 1) {
+            char id[THALOVANT_INTENT_SKILL_ID_MAX];
+            int is = fallback_skill(js, &row, id, sizeof(id));
+            if (is < 0) {
+                return is;
+            }
+            if (is == 0 || (have_last && strcmp(id, last) <= 0)) {
+                continue;
+            }
+            if (!have_next || strcmp(id, found.skill_id) < 0) {
+                memcpy(found.skill_id, id, sizeof(id));
+                have_next = true;
+            }
+        }
+        if (rc < 0) {
+            return rc;
+        }
+        if (!have_next) {
+            return delivered;
+        }
+        found.index = delivered;
+        delivered++;
+        memcpy(last, found.skill_id, sizeof(last));
+        have_last = true;
+        if (!fn(&found, user)) {
+            return delivered;
+        }
+    }
 }
 
 /* --------------------------------------------------------- languages */

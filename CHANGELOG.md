@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0 - 2026-10-11
+
+- `thalovant_intent_list_all_build_payload()` / `_frame()` ask `ovos.intent.list` with no language anywhere in the frame, so the hub lists every language it loaded. A hub loads its `lang` and `secondary_langs` and lists nothing under any other tag: measured on all 13 public hubs on 2026-10-11, a phone set to es-ES, ja-JP or de-DE got zero rows from a hub that answers those people in its own language. The existing builders still read a NULL `lang` as `en-us`, byte for byte.
+- `thalovant_intent_event` gains `session_lang`, the `context.session.lang` the hub stamped on its reply. On a reply to the language-less listing it is the language the hub opened the session in, its own default (en-US on Daily Desk, which lists fr-FR first).
+- Which of the hub's languages to show stays the caller's choice. This library holds no inventory and has no closest-language matcher; that needs CLDR's language distance data, the same footprint question as zlib under `binary`. `include/thalovant/intents.h` spells out the reference's order: candidates are languages with an enabled template row, then the same language in another region, then `session_lang` when the hub listed it, then the most template rows with the first listed winning a tie. The tests walk a real reply through that order.
+- `thalovant_skills_list_build_payload()` / `_frame()` ask `ovos.skills.list`, and `thalovant_skills_fallbacks()` delivers the fallback skills of its reply: rows whose `capabilities` holds `"fallback"` and whose `session_id` is absent, null, `""` or `"default"`. Malformed rows are skipped. Ids come trimmed, once each, in skill-id order, with no allocation. Known and unknown stay apart: a count (0 is a known empty list) against `THALOVANT_ERR_HUB_REFUSED` for `ok: false`, `THALOVANT_ERR_MISSING` when `skills` is not a list, and `THALOVANT_ERR_POLICY_DENIED` for a denial. No priority is reported, because none is served. A connection needs `ovos.skills.list` on its allow-list.
+- `ovos.skills.fallback.list` is deprecated. ovos-core #988 reverted it the day #951 added it, so no hub answers it and a caller waiting on it spent its whole timeout for nothing. Its constants, builders and `THALOVANT_FALLBACK_LIST_RESPONSE` stay so nothing exported disappears.
+- Acknowledges parity references `600b10e7e159` (thalovant-python-sdk 0.9.6) and `5b973a65ab58` (0.9.7). 0.9.6 asks the usual form when a listing has keyword rows but no sentence, not only when it is empty. That is a change to the reference's retry loop, and this library has no loop: the caller sends every listing and decides on the answer, so nothing here changes for it. `src/intents.c`, `include/thalovant/intents.h` and `tests/test_intents.c` are now declared under the contract's `runtime` capability.
+
 ## 0.7.3 - 2026-10-02
 
 - Automated patch release of the unreleased changes on `main` since v0.7.2.
