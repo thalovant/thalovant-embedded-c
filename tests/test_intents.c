@@ -830,8 +830,354 @@ static void test_fallback_introspection(void)
     CHECK_INT_EQ(classify(malformed, "req-1", &event), THALOVANT_ERR_JSON);
 }
 
+/* ------------------------------------------- a language the hub never loaded */
+
+/*
+ * Measured on all 13 public hubs on 2026-10-11: a hub loads its lang and
+ * secondary_langs and lists nothing under any other tag. The listing with no
+ * language names them all; Daily Desk lists fr-FR first and opens a
+ * language-less session in en-US.
+ */
+static const char LIST_ALL_RESPONSE[] =
+    "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list.response\",\"data\":"
+    "{\"ok\":true,\"intents\":[" WEATHER_ROW("fr-FR") "," SHADOW_ROW("fr-FR") ","
+    WEATHER_ROW("en-US") "," SHADOW_ROW("en-US") "]},"
+    "\"context\":{\"request_id\":\"req-all\",\"thalovant_request_id\":\"req-all\","
+    "\"session\":{\"session_id\":\"sess-1\",\"lang\":\"en-US\",\"request_id\":\"req-all\"}}}}";
+
+static void test_build_list_all_query(void)
+{
+    /* lang is ignored: no "lang" key anywhere, the hub answers in its own. */
+    thalovant_intent_list_request request = { "es-es", "sess-1", "kitchen", "req-all", false };
+    char out[1024];
+    int len = thalovant_intent_list_all_build_payload(&request, out, sizeof(out));
+    CHECK(len > 0);
+    CHECK_INT_EQ(len, strlen(out));
+    CHECK_STR_EQ(out, "{\"type\":\"ovos.intent.list\",\"data\":{},"
+                      "\"context\":{\"request_id\":\"req-all\",\"thalovant_request_id\":\"req-all\","
+                      "\"session\":{\"session_id\":\"sess-1\",\"site_id\":\"kitchen\","
+                      "\"request_id\":\"req-all\"}}}");
+
+    request.include_definitions = true;
+    request.site_id = NULL;
+    len = thalovant_intent_list_all_build_frame(&request, out, sizeof(out));
+    CHECK(len > 0);
+    CHECK_STR_EQ(out, "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.intent.list\",\"data\":"
+                      "{\"include_definitions\":true},\"context\":{\"request_id\":\"req-all\","
+                      "\"thalovant_request_id\":\"req-all\",\"session\":{\"session_id\":\"sess-1\","
+                      "\"request_id\":\"req-all\"}}},\"metadata\":{},\"route\":[],\"node\":null,"
+                      "\"target_site_id\":null,\"target_pubkey\":null,\"source_peer\":null}");
+    CHECK(strstr(out, "lang") == NULL);
+
+    /* The language-bound builder still reads NULL as "en-us". */
+    request.lang = NULL;
+    CHECK(thalovant_intent_list_build_payload(&request, out, sizeof(out)) > 0);
+    CHECK(strstr(out, "\"data\":{\"lang\":\"en-us\",\"include_definitions\":true}") != NULL);
+
+    CHECK_INT_EQ(thalovant_intent_list_all_build_payload(NULL, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+    request.request_id = "";
+    CHECK_INT_EQ(thalovant_intent_list_all_build_frame(&request, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+    request.request_id = "req-all";
+    request.session_id = NULL;
+    CHECK_INT_EQ(thalovant_intent_list_all_build_payload(&request, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+    request.session_id = "sess-1";
+    CHECK_INT_EQ(thalovant_intent_list_all_build_payload(&request, out, 24), THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_intent_list_all_build_frame(&request, out, 24), THALOVANT_ERR_NOMEM);
+}
+
+/*
+ * What a caller does with the reply, written the way the header documents
+ * it: group by language (spellings folded, first seen kept, hub order),
+ * candidates are groups with an enabled template row, then the same
+ * language, then the session's, then the most rows. The library ships no
+ * closest-language matcher, so "the same language" here is only the
+ * primary subtag -- enough for the cases below, not a substitute for one.
+ */
+#define GROUPS_MAX 4
+
+typedef struct {
+    char tag[GROUPS_MAX][THALOVANT_LANG_MAX];
+    int templates[GROUPS_MAX];
+    int count;
+} hub_groups;
+
+static bool group_row(const thalovant_intent_registration *row, void *user)
+{
+    hub_groups *groups = user;
+    if (row->lang[0] == '\0') {
+        return true;
+    }
+    int at = 0;
+    while (at < groups->count && !thalovant_intent_same_language(groups->tag[at], row->lang)) {
+        at++;
+    }
+    if (at == groups->count) {
+        if (groups->count == GROUPS_MAX) {
+            return true;
+        }
+        strcpy(groups->tag[at], row->lang);
+        groups->templates[at] = 0;
+        groups->count++;
+    }
+    if (row->enabled && row->engine == THALOVANT_INTENT_ENGINE_PADATIOUS) {
+        groups->templates[at]++;
+    }
+    return true;
+}
+
+static bool same_primary(const char *a, const char *b)
+{
+    size_t i = 0;
+    for (; a[i] != '\0' && a[i] != '-' && a[i] != '_'; i++) {
+        if (b[i] == '\0' || b[i] == '-' || b[i] == '_' ||
+            (a[i] | 0x20) != (b[i] | 0x20)) {
+            return false;
+        }
+    }
+    return b[i] == '\0' || b[i] == '-' || b[i] == '_';
+}
+
+static const char *choose(const hub_groups *groups, const char *asked, const char *session_lang)
+{
+    int best = -1;
+    for (int i = 0; i < groups->count; i++) {
+        if (groups->templates[i] > 0 && same_primary(asked, groups->tag[i])) {
+            return groups->tag[i];
+        }
+    }
+    for (int i = 0; i < groups->count; i++) {
+        if (groups->templates[i] > 0 && thalovant_intent_same_language(session_lang, groups->tag[i])) {
+            return groups->tag[i];
+        }
+    }
+    for (int i = 0; i < groups->count; i++) {
+        if (groups->templates[i] > 0 && (best < 0 || groups->templates[i] > groups->templates[best])) {
+            best = i;
+        }
+    }
+    return best < 0 ? NULL : groups->tag[best];
+}
+
+static void test_a_language_the_hub_never_loaded(void)
+{
+    thalovant_intent_event event;
+    CHECK_INT_EQ(classify(LIST_ALL_RESPONSE, "req-all", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_LIST_RESPONSE);
+    CHECK_STR_EQ(event.session_lang, "en-US");
+    /* No lang in the context, so the old chain lands on the session's too. */
+    CHECK_STR_EQ(event.lang, "en-US");
+
+    hub_groups groups;
+    memset(&groups, 0, sizeof(groups));
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, group_row, &groups), 4);
+    CHECK_INT_EQ(groups.count, 2);
+    CHECK_STR_EQ(groups.tag[0], "fr-FR"); /* the hub's order, French first */
+    CHECK_STR_EQ(groups.tag[1], "en-US");
+
+    /* es-ES, ja-JP, de-DE: the language the hub answers that person in. */
+    CHECK_STR_EQ(choose(&groups, "es-ES", event.session_lang), "en-US");
+    CHECK_STR_EQ(choose(&groups, "ja-JP", event.session_lang), "en-US");
+    CHECK_STR_EQ(choose(&groups, "de-DE", event.session_lang), "en-US");
+    /* en-CA on a hub with en-GB and fr-FR: the same language first. */
+    hub_groups gb = { { "fr-FR", "en-GB" }, { 2, 2 }, 2 };
+    CHECK_STR_EQ(choose(&gb, "en-CA", "fr-FR"), "en-GB");
+    /* No hint: most template rows, the first listed on a tie. */
+    hub_groups more = { { "fr-FR", "en-US" }, { 1, 2 }, 2 };
+    CHECK_STR_EQ(choose(&more, "ja-JP", ""), "en-US");
+    hub_groups tie = { { "fr-FR", "en-US" }, { 2, 2 }, 2 };
+    CHECK_STR_EQ(choose(&tie, "ja-JP", ""), "fr-FR");
+    /* A hint naming nothing listed is skipped. */
+    CHECK_STR_EQ(choose(&tie, "ja-JP", "it-IT"), "fr-FR");
+    /* Keyword rows only: nothing to choose, the answer stands. */
+    hub_groups keywords = { { "en-US" }, { 0 }, 1 };
+    CHECK(choose(&keywords, "ja-JP", "en-US") == NULL);
+
+    /* A reply with no session says nothing about the hub's language. */
+    CHECK_INT_EQ(classify(LIST_RESPONSE_EN, "req-1", &event), THALOVANT_OK);
+    CHECK_STR_EQ(event.session_lang, "en-us");
+    const char *bare = "{\"type\":\"ovos.intent.list.response\",\"data\":{\"intents\":[]},"
+                       "\"context\":{\"request_id\":\"r\",\"lang\":\"fr-FR\"}}";
+    CHECK_INT_EQ(classify(bare, "r", &event), THALOVANT_OK);
+    CHECK_STR_EQ(event.session_lang, "");
+    CHECK_STR_EQ(event.lang, "fr-FR");
+    const char *refused = "{\"type\":\"ovos.intent.list.response\",\"data\":{\"ok\":false},"
+                          "\"context\":{\"session\":{\"lang\":\"en-US\"}}}";
+    CHECK_INT_EQ(classify(refused, NULL, &event), THALOVANT_OK);
+    memset(&groups, 0, sizeof(groups));
+    CHECK_INT_EQ(thalovant_intent_list_rows(&event, group_row, &groups), THALOVANT_ERR_HUB_REFUSED);
+    const char *long_lang = "{\"type\":\"ovos.intent.list.response\",\"data\":{\"lang\":\"en\"},"
+                            "\"context\":{\"session\":{\"lang\":\"a-very-long-language-tag\"}}}";
+    CHECK_INT_EQ(classify(long_lang, NULL, &event), THALOVANT_ERR_NOMEM);
+}
+
+/* ------------------------------------------------- fallbacks from ovos.skills.list */
+
+typedef struct {
+    int count;
+    int stop_after;
+    char joined[256];
+} fallback_log;
+
+static bool log_fallback(const thalovant_hub_fallback *fallback, void *user)
+{
+    fallback_log *log = user;
+    CHECK_INT_EQ(fallback->index, log->count);
+    log->count++;
+    if (log->joined[0] != '\0') {
+        strcat(log->joined, " | ");
+    }
+    strcat(log->joined, fallback->skill_id);
+    return log->stop_after == 0 || log->count < log->stop_after;
+}
+
+#define SKILLS_RESPONSE(data)                                                              \
+    "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.skills.list.response\",\"data\":"   \
+    data ",\"context\":{\"request_id\":\"req-s\",\"session\":{\"session_id\":\"sess-1\","   \
+    "\"lang\":\"en-US\"}}}}"
+
+/* The reference's test_only_the_hubs_own_fallback_skills_are_listed, plus
+ * the shapes C sees on the wire: a duplicate, a null session, a session
+ * that is only nearly "default", an escaped capability, a numeric id. */
+static const char SKILLS_LISTED[] = SKILLS_RESPONSE(
+    "{\"ok\":true,\"skills\":["
+    "{\"skill_id\":\"thalovant-skill-memory.thalovant\",\"session_id\":\"default\","
+    "\"capabilities\":[\"fallback\",\"converse\"],\"intents\":0},"
+    "{\"skill_id\":\"thalovant-skill-weather.thalovant\",\"session_id\":\"default\","
+    "\"capabilities\":[],\"intents\":16},"
+    "{\"skill_id\":\"someone-elses.fallback\",\"session_id\":\"another-session\","
+    "\"capabilities\":[\"fallback\"],\"intents\":0},"
+    "{\"skill_id\":\"custos-fallback.thalovant\",\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"\",\"session_id\":\"default\",\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"no-capabilities.thalovant\",\"session_id\":\"default\",\"capabilities\":null},"
+    "\"not a row\","
+    "{\"skill_id\":\" thalovant-skill-memory.thalovant \",\"session_id\":\"\","
+    "\"capabilities\":[\"converse\",\"fallback\"]},"
+    "{\"skill_id\":\"a-null-session.thalovant\",\"session_id\":null,\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"nearly-default.thalovant\",\"session_id\":\" default \","
+    "\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"numeric-session.thalovant\",\"session_id\":7,\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"escaped.thalovant\",\"capabilities\":[\"fall\\u0062ack\"]},"
+    "{\"skill_id\":42,\"capabilities\":[\"fallback\"]},"
+    "{\"skill_id\":\"case.thalovant\",\"capabilities\":[\"Fallback\",\"fallbacks\",1]}"
+    "]}");
+
+static void test_build_skills_list_query(void)
+{
+    thalovant_intent_list_request request = { "fr-fr", "sess-1", "kitchen", "req-s", true };
+    char out[1024];
+    int len = thalovant_skills_list_build_payload(&request, out, sizeof(out));
+    CHECK(len > 0);
+    CHECK_STR_EQ(out, "{\"type\":\"ovos.skills.list\",\"data\":{},"
+                      "\"context\":{\"request_id\":\"req-s\",\"thalovant_request_id\":\"req-s\","
+                      "\"session\":{\"session_id\":\"sess-1\",\"site_id\":\"kitchen\","
+                      "\"request_id\":\"req-s\"}}}");
+    len = thalovant_skills_list_build_frame(&request, out, sizeof(out));
+    CHECK(len > 0);
+    CHECK(strncmp(out, "{\"msg_type\":\"bus\",\"payload\":{\"type\":\"ovos.skills.list\",", 54) == 0);
+    CHECK(strstr(out, "ovos.skills.fallback.list") == NULL);
+    CHECK_INT_EQ(thalovant_skills_list_build_frame(&request, out, 16), THALOVANT_ERR_NOMEM);
+    CHECK_INT_EQ(thalovant_skills_list_build_payload(NULL, out, sizeof(out)), THALOVANT_ERR_INVALID);
+    request.request_id = NULL;
+    CHECK_INT_EQ(thalovant_skills_list_build_payload(&request, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+    request.request_id = "req-s";
+    request.session_id = NULL;
+    CHECK_INT_EQ(thalovant_skills_list_build_frame(&request, out, sizeof(out)),
+                 THALOVANT_ERR_INVALID);
+}
+
+static void test_only_the_hubs_own_fallback_skills_are_listed(void)
+{
+    thalovant_intent_event event;
+    CHECK_INT_EQ(classify(SKILLS_LISTED, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_SKILLS_LIST_RESPONSE);
+    CHECK_STR_EQ(event.session_lang, "en-US");
+    CHECK(event.ok && event.items_json != NULL);
+    fallback_log log;
+    memset(&log, 0, sizeof(log));
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), 4);
+    CHECK_STR_EQ(log.joined, "a-null-session.thalovant | custos-fallback.thalovant | "
+                             "escaped.thalovant | thalovant-skill-memory.thalovant");
+
+    /* A caller may stop early; what was delivered is counted. */
+    memset(&log, 0, sizeof(log));
+    log.stop_after = 2;
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), 2);
+    CHECK_STR_EQ(log.joined, "a-null-session.thalovant | custos-fallback.thalovant");
+
+    CHECK_INT_EQ(classify(SKILLS_LISTED, "another-request", &event), THALOVANT_OK);
+    CHECK_INT_EQ(event.kind, THALOVANT_INTENT_IGNORE);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_INVALID);
+}
+
+static void test_unknown_fallbacks_are_not_none(void)
+{
+    thalovant_intent_event event;
+    fallback_log log;
+    memset(&log, 0, sizeof(log));
+
+    /* Known empty: the hub said there are none. */
+    static const char none[] = SKILLS_RESPONSE("{\"ok\":true,\"skills\":["
+        "{\"skill_id\":\"weather\",\"capabilities\":[\"converse\"]}]}");
+    CHECK_INT_EQ(classify(none, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), 0);
+    static const char empty[] = SKILLS_RESPONSE("{\"skills\":[]}");
+    CHECK_INT_EQ(classify(empty, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), 0);
+
+    /* Unknown: ok:false, no list, a list that is not one, a denial. */
+    static const char refused[] = SKILLS_RESPONSE("{\"ok\":false,\"skills\":[]}");
+    CHECK_INT_EQ(classify(refused, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_HUB_REFUSED);
+    static const char missing[] = SKILLS_RESPONSE("{\"ok\":true}");
+    CHECK_INT_EQ(classify(missing, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_MISSING);
+    static const char not_a_list[] = SKILLS_RESPONSE("{\"ok\":true,\"skills\":{}}");
+    CHECK_INT_EQ(classify(not_a_list, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_MISSING);
+    static const char denied[] =
+        "{\"type\":\"hive.policy.denied\",\"data\":{\"denied_type\":\"ovos.skills.list\","
+        "\"code\":\"acl_disallowed_type\",\"reason\":\"no\"},\"context\":{\"request_id\":\"req-s\"}}";
+    CHECK_INT_EQ(classify(denied, "req-s", &event), THALOVANT_OK);
+    CHECK_STR_EQ(event.denied_type, "ovos.skills.list");
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_POLICY_DENIED);
+    CHECK_INT_EQ(log.count, 0);
+
+    /* Not this walker's event; no callback. */
+    CHECK_INT_EQ(classify(LIST_RESPONSE_EN, "req-1", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(classify(empty, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, NULL, &log), THALOVANT_ERR_INVALID);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(NULL, log_fallback, &log), THALOVANT_ERR_INVALID);
+
+    /* Malformed is refused, never shown as known empty. */
+    static const char malformed[] = SKILLS_RESPONSE("{\"ok\":true,\"skills\":[1,]}");
+    CHECK_INT_EQ(classify(malformed, "req-s", &event), THALOVANT_ERR_JSON);
+
+    /* A fallback id too long for its buffer is an error, not a quiet drop. */
+    static const char long_id[] = SKILLS_RESPONSE("{\"skills\":[{\"skill_id\":\""
+        "a-skill-id-much-longer-than-sixty-four-bytes-which-is-the-default-limit.thalovant"
+        "\",\"capabilities\":[\"fallback\"]}]}");
+    CHECK_INT_EQ(classify(long_id, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), THALOVANT_ERR_NOMEM);
+    /* ... but a long id that is not a fallback is just passed over. */
+    static const char long_other[] = SKILLS_RESPONSE("{\"skills\":[{\"skill_id\":\""
+        "a-skill-id-much-longer-than-sixty-four-bytes-which-is-the-default-limit.thalovant"
+        "\",\"capabilities\":[]}]}");
+    CHECK_INT_EQ(classify(long_other, "req-s", &event), THALOVANT_OK);
+    CHECK_INT_EQ(thalovant_skills_fallbacks(&event, log_fallback, &log), 0);
+}
+
 void tlv_test_intents(void)
 {
+    test_build_list_all_query();
+    test_a_language_the_hub_never_loaded();
+    test_build_skills_list_query();
+    test_only_the_hubs_own_fallback_skills_are_listed();
+    test_unknown_fallbacks_are_not_none();
     test_fallback_introspection();
     test_build_list_query();
     test_build_describe_query();

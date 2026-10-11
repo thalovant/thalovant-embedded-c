@@ -55,6 +55,39 @@
  * Language tags compare case-insensitively with "_" and "-" folded
  * (thalovant_intent_same_language): the runtime answers "fr-fr" as "fr-FR".
  *
+ * A language the hub never loaded. A hub loads its `lang` and
+ * `secondary_langs` (en-US and fr-FR on most public hubs) and lists nothing
+ * under any other tag, so a phone set to es-ES, ja-JP or de-DE gets zero
+ * rows -- from a hub that answers those people all the same, in its own
+ * language. thalovant_intent_list_all_build_frame asks the listing with no
+ * language at all, and the reply carries every language the hub loaded; the
+ * event's session_lang is the language the hub opened that reply's session
+ * in, which is the closest the bus comes to saying "the hub's own language".
+ * Which group to show is the caller's choice, because this library holds no
+ * inventory and no closest-language matcher (that needs CLDR's language
+ * distance tables, the footprint decision the parity contract records). The
+ * reference (thalovant-python-sdk 0.9.7, nearest_hub_language) chooses so:
+ *   0. ask this only when the asked language, and its usual form, left no
+ *      enabled template row; ask it at most once per inventory;
+ *   1. group the rows by `lang`, folding spellings with
+ *      thalovant_intent_same_language and keeping the first one seen and the
+ *      hub's order; only a group with an enabled template row (engine
+ *      THALOVANT_INTENT_ENGINE_PADATIOUS) is a candidate;
+ *   2. the same language in another region first (en-CA takes en-GB);
+ *   3. then session_lang, when it names a listed candidate;
+ *   4. then the candidate with the most enabled template rows, the first
+ *      listed on a tie.
+ * The chosen tag is where the sentences were listed (`listed_in`); say so
+ * when it is not the person's language. A timeout, a denial or ok:false on
+ * this query leaves the answer as it was.
+ *
+ * Fallback skills. ovos.skills.fallback.list came from ovos-core #951 and
+ * #988 reverted it the same day: no hub answers it. A skill that takes what
+ * nothing else matched is found through ovos.skills.list instead
+ * (OVOS-INTENT-4 section 10.3), which names every skill the hub loaded with
+ * the capabilities it declared; see thalovant_skills_list_build_frame and
+ * thalovant_skills_fallbacks. No priority is served, so none is reported.
+ *
  * Memory: the list reply is unbounded (a hub registers hundreds of rows), so
  * nothing here tokenizes the whole frame. The classifier finds the reply's
  * fields with shallow scans and keeps raw slices into the caller's frame
@@ -78,8 +111,14 @@
 #define THALOVANT_EVENT_INTENT_DESCRIBE "ovos.intent.describe"
 #define THALOVANT_EVENT_INTENT_DESCRIBE_RESPONSE "ovos.intent.describe.response"
 #define THALOVANT_EVENT_POLICY_DENIED "hive.policy.denied"
+/* Kept so nothing exported disappears; no hub answers it (see above). */
 #define THALOVANT_EVENT_FALLBACK_LIST "ovos.skills.fallback.list"
 #define THALOVANT_EVENT_FALLBACK_LIST_RESPONSE "ovos.skills.fallback.list.response"
+/* Every skill the hub loaded, with its declared capabilities. */
+#define THALOVANT_EVENT_SKILLS_LIST "ovos.skills.list"
+#define THALOVANT_EVENT_SKILLS_LIST_RESPONSE "ovos.skills.list.response"
+/* The capability a skill declares when it answers what nothing else matched. */
+#define THALOVANT_FALLBACK_CAPABILITY "fallback"
 /*
  * The engines' own manifests: names only ("<skill_id>:<intent_name>"), no
  * language -- the names-only fallback of the desktop SDKs for a connection
@@ -118,6 +157,23 @@ int thalovant_intent_list_build_payload(const thalovant_intent_list_request *req
 int thalovant_intent_list_build_frame(const thalovant_intent_list_request *request, char *out,
                                       size_t cap);
 
+/*
+ * The same listing in every language the hub loaded: `request->lang` is
+ * ignored and no "lang" key is sent anywhere -- not in data, not in the
+ * context, not in the session -- so the hub answers in a session opened in
+ * its own default language (the reply's session_lang). include_definitions
+ * is honoured as above.
+ *   {"type":"ovos.intent.list","data":{[ "include_definitions":true ]},
+ *    "context":{"request_id":"<R>","thalovant_request_id":"<R>",
+ *      "session":{"session_id":"<S>","site_id":"<site>","request_id":"<R>"}}}
+ * thalovant_intent_list_build_payload/_frame keep reading a NULL lang as
+ * "en-us", as they always have.
+ */
+int thalovant_intent_list_all_build_payload(const thalovant_intent_list_request *request,
+                                            char *out, size_t cap);
+int thalovant_intent_list_all_build_frame(const thalovant_intent_list_request *request,
+                                          char *out, size_t cap);
+
 typedef struct {
     const char *skill_id;    /* required */
     const char *intent_name; /* required */
@@ -137,14 +193,32 @@ int thalovant_intent_describe_build_payload(const thalovant_intent_describe_requ
 int thalovant_intent_describe_build_frame(const thalovant_intent_describe_request *request,
                                           char *out, size_t cap);
 
-/* Fallback handlers have no registered phrases. Query them separately so
- * an empty intent manifest is not mistaken for a hub unable to answer.
- * Reuses the list request's session/context fields; include_definitions is
- * ignored and the query data is {} (fallback handlers are language-neutral). */
+/* Deprecated: ovos.skills.fallback.list was reverted upstream the day it
+ * landed (ovos-core #988), so no hub answers it and a caller waiting on it
+ * waits out its whole timeout. Kept, byte for byte, so existing callers
+ * still build; use thalovant_skills_list_build_frame instead. */
 int thalovant_fallback_list_build_payload(const thalovant_intent_list_request *request,
                                           char *out, size_t cap);
 int thalovant_fallback_list_build_frame(const thalovant_intent_list_request *request,
                                         char *out, size_t cap);
+
+/*
+ * Fallback skills have no registered phrases, so a skill like a memory or a
+ * catch-all answers without ever appearing in the intent manifest. Ask
+ * ovos.skills.list to find them. Reuses the list request's session/context
+ * fields; lang and include_definitions are ignored and no "lang" is sent,
+ * as the reference sends none:
+ *   {"type":"ovos.skills.list","data":{},
+ *    "context":{"request_id":"<R>","thalovant_request_id":"<R>",
+ *      "session":{"session_id":"<S>","site_id":"<site>","request_id":"<R>"}}}
+ * The reference caps the wait at min(timeout, 1.5 s): a runtime that does
+ * not implement it never answers. A connection needs ovos.skills.list in
+ * its allow-list; until then the hub answers hive.policy.denied.
+ */
+int thalovant_skills_list_build_payload(const thalovant_intent_list_request *request,
+                                        char *out, size_t cap);
+int thalovant_skills_list_build_frame(const thalovant_intent_list_request *request, char *out,
+                                      size_t cap);
 
 /* ------------------------------------------------------------- replies */
 
@@ -154,6 +228,7 @@ typedef enum {
     THALOVANT_INTENT_DESCRIBE_RESPONSE, /* "ovos.intent.describe.response" */
     THALOVANT_INTENT_POLICY_DENIED,     /* "hive.policy.denied" */
     THALOVANT_FALLBACK_LIST_RESPONSE,   /* "ovos.skills.fallback.list.response" */
+    THALOVANT_SKILLS_LIST_RESPONSE,     /* "ovos.skills.list.response" */
 } thalovant_intent_kind;
 
 typedef enum {
@@ -174,7 +249,7 @@ typedef struct {
     bool ok;
     char error[THALOVANT_INTENT_ERROR_MAX];
     /* Raw JSON slice of data.intents (list), data.definitions (describe),
-     * or data.fallbacks (fallback list)
+     * data.fallbacks (fallback list) or data.skills (skills list)
      * inside the frame buffer, and its element count; NULL/0 when absent.
      * Walk it with thalovant_intent_list_rows / thalovant_intent_definitions. */
     const char *items_json;
@@ -194,15 +269,26 @@ typedef struct {
     const char *allowed_json;
     size_t allowed_len;
     int allowed_count;
+
+    /* Any kind: context.session.lang as the hub stamped it on the reply, ""
+     * when absent. On a reply to thalovant_intent_list_all_build_frame,
+     * which names no language, it is the language the hub opened the
+     * session in: its own default. A hint, not a promise -- a hub may keep
+     * a session's language from an earlier exchange -- so use it only to
+     * choose between languages the hub listed. */
+    char session_lang[THALOVANT_LANG_MAX];
 } thalovant_intent_event;
 
-/* A fallback response is known only when ok is true and items_json is
+/* (Deprecated query, see thalovant_fallback_list_build_frame.) A fallback
+ * response is known only when ok is true and items_json is
  * non-NULL, including a valid empty array. Silence, policy denial or a
  * missing/malformed array means unknown, never "no fallback handlers".
  * Use scan_next/scan_key on items_json to read skill_id and priority in
  * bounded memory. The integrator owns priority conversion, sorting and
  * may-answer inference: enabled phrases OR any fallback OR unknown
- * fallbacks. A fallback's presence is not proof it supports a language. */
+ * fallbacks. A fallback's presence is not proof it supports a language.
+ * For ovos.skills.list.response, thalovant_skills_fallbacks does all of
+ * this. */
 
 /*
  * Classify a decrypted plaintext HiveMessage frame against `request_id`
@@ -313,6 +399,41 @@ int thalovant_intent_samples(const char *definition_json, size_t len,
  */
 int thalovant_intent_allowed_types(const thalovant_intent_event *event,
                                    thalovant_intent_allowed_fn fn, void *user);
+
+/* One fallback skill from an ovos.skills.list.response. There is no
+ * priority: ovos.skills.list has no order field and the query that had one
+ * was reverted, so this list says which skills are fallbacks, not which one
+ * the hub tries first. */
+typedef struct {
+    int index; /* position in skill-id order, from 0 */
+    char skill_id[THALOVANT_INTENT_SKILL_ID_MAX];
+} thalovant_hub_fallback;
+
+typedef bool (*thalovant_hub_fallback_fn)(const thalovant_hub_fallback *fallback, void *user);
+
+/*
+ * Deliver the fallback skills of a THALOVANT_SKILLS_LIST_RESPONSE event:
+ * the rows whose `capabilities` list holds "fallback" and whose
+ * `session_id` is absent, null, "" or "default" -- every installed skill
+ * loads in "default", and a row from another session is somebody else's.
+ * A row without a non-blank string skill_id, or whose capabilities is not a
+ * list, is skipped and the rest are kept. Delivered once each, trimmed, in
+ * byte order of skill id (which is code point order), in bounded memory and
+ * with no allocation: each delivery rescans the rows, which costs
+ * fallbacks x rows comparisons on a list of a few dozen skills.
+ *
+ * Known and unknown stay different answers. Returns the number delivered
+ * (0 is a known empty list: the hub said there are none), or, when the hub
+ * could not say:
+ *   THALOVANT_ERR_HUB_REFUSED  the reply says ok:false;
+ *   THALOVANT_ERR_MISSING      data.skills is absent or not a list;
+ *   THALOVANT_ERR_POLICY_DENIED for a POLICY_DENIED event;
+ * and THALOVANT_ERR_INVALID for any other kind of event, THALOVANT_ERR_NOMEM
+ * for a fallback skill id longer than THALOVANT_INTENT_SKILL_ID_MAX. A
+ * silence (no reply before the caller's deadline) is unknown as well.
+ */
+int thalovant_skills_fallbacks(const thalovant_intent_event *event,
+                               thalovant_hub_fallback_fn fn, void *user);
 
 /* "fr-fr", "fr_FR" and " FR-fr " name the same language. NULL reads as "". */
 bool thalovant_intent_same_language(const char *a, const char *b);

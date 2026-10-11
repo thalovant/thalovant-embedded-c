@@ -5,6 +5,13 @@
 
 #include "thalovant/thalovant.h"
 
+static bool keep_walking(const thalovant_hub_fallback *fallback, void *user)
+{
+    (void)fallback;
+    (void)user;
+    return true;
+}
+
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size);
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
@@ -56,7 +63,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
     thalovant_ask_request request = {"fuzz", NULL, "session", NULL, "request"};
     thalovant_ask_hints hints = {NULL, pattern, NULL};
     (void)thalovant_ask_build_frame_with_hints(&request, &hints, text, cap);
-    (void)thalovant_intent_classify(json, size, "fuzz-request", &intents);
+    if (thalovant_intent_classify(json, size, "fuzz-request", &intents) == THALOVANT_OK) {
+        (void)thalovant_skills_fallbacks(&intents, keep_walking, NULL);
+    }
     (void)thalovant_hex_decode(json, size, bytes, cap);
     (void)thalovant_base64_decode(json, size, bytes, cap);
 
