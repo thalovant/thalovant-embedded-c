@@ -13,8 +13,8 @@ Two review threads left unresolved on merged pull requests still applied to `mai
 
 Verification:
 
-- `make test` (gcc) and `make test CC=clang CFLAGS="-O1 -g -fsanitize=address,undefined ..."`: 18362 checks, 0 failures; `make vectors-strict` passes.
-- Reverting the generator makes `node tools/generate-refusal-vectors.mjs --check` fail ("out of date with the shared vectors").
+- `make test` (gcc) and `make test CC=clang CFLAGS="-O1 -g -fsanitize=address,undefined ..."`: 18364 checks, 0 failures; `make vectors-strict` passes.
+- Reverting the generator makes `node tools/generate-refusal-vectors.mjs --check` fail ("out of date with the shared vectors"). Reverting it and regenerating the header makes `make test` fail at the new `test_the_frames_spell_numbers_as_the_shared_file_does` in `tests/test_refusal.c` (`"used":1e+20` is missing from the frame). That check was added at CodeRabbit's suggestion on #36, together with checking the generator's marker guard against the decoded fixture values rather than the raw text.
 - With a temporary vector naming nine skills, the old `tests/test_ask.c` fails (`count == 8, expected 9`) and the new one passes. With a temporary vector whose frames name one skill more than it expects, the old test reads past `skills[]` (AddressSanitizer: global-buffer-overflow) and the new one reports the failed check and stops. Neither temporary vector is committed.
 - `check-sdk-parity.py --consumer thalovant-embedded-c` verifies after refreshing the three evidence hashes in `contracts/sdk-parity.json`.
 

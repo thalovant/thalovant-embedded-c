@@ -72,10 +72,27 @@ static void test_the_grace_window_is_the_one_the_vectors_name(void)
     CHECK_INT_EQ(THALOVANT_UNTRACKED_UTTERANCE_GRACE_SECONDS, REFUSAL_GRACE_SECONDS);
 }
 
+static void test_the_frames_spell_numbers_as_the_shared_file_does(void)
+{
+    /* The generator once rebuilt every frame through a double, so the shared
+     * case's "used": 1e+20 reached the reader as 100000000000000000000 and the
+     * exponent form was never read at all. Regenerating with that generator
+     * would still pass every check above: both spellings read as 0. */
+    size_t found = 0;
+    for (size_t i = 0; i < sizeof(REFUSAL_VECTORS) / sizeof(REFUSAL_VECTORS[0]); ++i) {
+        const refusal_vector *want = &REFUSAL_VECTORS[i];
+        if (strcmp(want->name, "a number no policy could have meant is not a count") != 0) continue;
+        CHECK(strstr(want->frame, "\"used\":1e+20") != NULL);
+        found++;
+    }
+    CHECK_INT_EQ((int)found, 1);
+}
+
 void tlv_test_refusal(void)
 {
     test_refusals_read_as_their_vectors_say();
     test_an_unanswered_question_is_not_a_refusal();
     test_a_denial_is_taken_only_by_the_ask_it_can_belong_to();
     test_the_grace_window_is_the_one_the_vectors_name();
+    test_the_frames_spell_numbers_as_the_shared_file_does();
 }

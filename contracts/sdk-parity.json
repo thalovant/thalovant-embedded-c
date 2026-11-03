@@ -66,8 +66,8 @@
       "tests": {
         "tests/fixtures/refusal-vectors.json": "6b0f4128f1cc9fd8a54944410ce93c6515bac6cde9257284e313a4fea825bfcb",
         "tests/refusal_vectors.h": "ba53ccff2806ecdfda02196b43d9569fe02189afa67bed83ca0c895d4fe80ddc",
-        "tests/test_refusal.c": "9276e0d085ff84f544cbfc0462639a7a21e702a1db404a3dfcebef3195d59a1e",
-        "tools/generate-refusal-vectors.mjs": "e55be5589e8397f84158fa4fbd406f60208c7e79d66a11b78546eb1e1cf587e0"
+        "tests/test_refusal.c": "2c697e767cf4abf16717725560192b01a3d8c308b450eef47c2964b4e788b1dc",
+        "tools/generate-refusal-vectors.mjs": "e90de9275d24cf2a535bf72cfeb5d6a2a82a3e83abe4c1a63ba705d23a6adb4b"
       },
       "vectors": {
         "refusal-vectors.json": "tests/fixtures/refusal-vectors.json"

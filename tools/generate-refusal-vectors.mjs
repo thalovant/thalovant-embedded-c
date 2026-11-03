@@ -26,7 +26,9 @@ const vectors = JSON.parse(source);
  * marker is put back as that text once the frame is a string again.
  */
 const NUMBER_MARK = "thalovant-number-lexeme:";
-if (source.includes(NUMBER_MARK)) throw new Error(`the shared vectors spell ${NUMBER_MARK} themselves`);
+// Checked on the decoded values, not the text: a string can spell the marker
+// with JSON escapes and still decode to it.
+if (JSON.stringify(vectors).includes(NUMBER_MARK)) throw new Error(`the shared vectors spell ${NUMBER_MARK} themselves`);
 function withNumbersAsText(text) {
   let out = "";
   for (let at = 0; at < text.length;) {
