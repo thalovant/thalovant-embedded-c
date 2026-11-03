@@ -1,4 +1,4 @@
-Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Start the audit log with the CodeRabbit follow-ups to #24 and #26.
+Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Note the chat-apps capability this SDK does not implement.
 
 # Audit
 
@@ -12,3 +12,8 @@ Known issues, technical debt and their status, from test runs and code reading. 
 ## Open
 
 - None found in this pass.
+
+## Chat apps not covered (2026-11-03)
+
+- **What:** this SDK has no methods for the chat apps routes (`/v1/bridges`), which the Python, Node, Go and Rust SDKs and the MCP server cover. `contracts/sdk-parity.json` records `chat-apps` as not applicable.
+- **Status:** a scope decision, not a defect: the API's impact records for chat apps list no obligation here. Revisit if an app built on this SDK needs to manage chat apps.
