@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1 - 2026-11-03
+
+- Automated patch release of the unreleased changes on `main` since v0.8.0.
+
 ## 0.8.0 - 2026-10-11
 
 - `thalovant_intent_list_all_build_payload()` / `_frame()` ask `ovos.intent.list` with no language anywhere in the frame, so the hub lists every language it loaded. A hub loads its `lang` and `secondary_langs` and lists nothing under any other tag: measured on all 13 public hubs on 2026-10-11, a phone set to es-ES, ja-JP or de-DE got zero rows from a hub that answers those people in its own language. The existing builders still read a NULL `lang` as `en-us`, byte for byte.
