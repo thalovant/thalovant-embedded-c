@@ -14,14 +14,54 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const vectors = JSON.parse(readFileSync(join(root, "tests/fixtures/refusal-vectors.json"), "utf8"));
+const source = readFileSync(join(root, "tests/fixtures/refusal-vectors.json"), "utf8");
+const vectors = JSON.parse(source);
+
+/*
+ * The frames keep every number exactly as the shared file spells it. Through
+ * JSON.parse and JSON.stringify a number is a double: `1e+20` came out as
+ * `100000000000000000000` and `9223372036854775808` as `9223372036854776000`,
+ * so the C reader was tested on a number the hub never sent. Each number
+ * outside a string is parsed as a marker string carrying its own text, and the
+ * marker is put back as that text once the frame is a string again.
+ */
+const NUMBER_MARK = "thalovant-number-lexeme:";
+// Checked on the decoded values, not the text: a string can spell the marker
+// with JSON escapes and still decode to it.
+if (JSON.stringify(vectors).includes(NUMBER_MARK)) throw new Error(`the shared vectors spell ${NUMBER_MARK} themselves`);
+function withNumbersAsText(text) {
+  let out = "";
+  for (let at = 0; at < text.length;) {
+    const char = text[at];
+    if (char === '"') {
+      let end = at + 1;
+      while (text[end] !== '"') end += text[end] === "\\" ? 2 : 1;
+      out += text.slice(at, end + 1);
+      at = end + 1;
+    } else if (char === "-" || (char >= "0" && char <= "9")) {
+      const lexeme = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(text.slice(at))[0];
+      out += JSON.stringify(NUMBER_MARK + lexeme);
+      at += lexeme.length;
+    } else {
+      out += char;
+      at += 1;
+    }
+  }
+  return out;
+}
+const lexical = JSON.parse(withNumbersAsText(source));
+const markedNumber = new RegExp(`"${NUMBER_MARK}([^"]+)"`, "g");
 
 const cString = (value) => JSON.stringify(String(value));
 const frameOf = (wire) =>
-  JSON.stringify({ msg_type: "bus", payload: { type: wire.type, data: wire.data ?? {}, context: wire.context ?? {} } });
+  JSON.stringify({ msg_type: "bus", payload: { type: wire.type, data: wire.data ?? {}, context: wire.context ?? {} } })
+    .replace(markedNumber, "$1");
 
-const refused = vectors.classification.filter((row) => row.expect.kind === "refused");
-const unanswered = vectors.classification.filter((row) => row.expect.kind === "unanswered");
+// The expectations are read as numbers; the frames come from the same rows
+// with every number still spelled as the shared file spells it.
+const rows = vectors.classification.map((row, index) => ({ ...row, event: lexical.classification[index].event }));
+const refused = rows.filter((row) => row.expect.kind === "refused");
+const unanswered = rows.filter((row) => row.expect.kind === "unanswered");
 const widestAllowed = Math.max(1, ...refused.map((row) => row.expect.allowed.length));
 
 const refusalLines = refused.map((row) => {

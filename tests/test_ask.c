@@ -224,7 +224,9 @@ static void test_reply_claims(void)
        the same rule the other SDKs apply. */
     for (size_t i = 0; i < sizeof(REPLY_SKILL_VECTORS) / sizeof(REPLY_SKILL_VECTORS[0]); ++i) {
         const reply_skill_vector *v = &REPLY_SKILL_VECTORS[i];
-        const char *seen[8];
+        /* As wide as the generated vectors: a fixed width would quietly stop
+           counting once a shared case named more skills than it holds. */
+        const char *seen[sizeof(v->skills) / sizeof(v->skills[0])];
         size_t count = 0;
         for (size_t f = 0; f < v->frames; ++f) {
             char id[128];
@@ -234,9 +236,12 @@ static void test_reply_claims(void)
             for (size_t k = 0; k < count; ++k) {
                 if (strcmp(seen[k], id) == 0) { already = true; break; }
             }
-            if (already || count >= sizeof(seen) / sizeof(seen[0])) continue;
-            /* Point at the vector's copy: `id` is reused every iteration. */
+            if (already) continue;
+            /* One id more than the case expects is a failure, and it must stop
+               here: v->skills has nothing at that index to compare against. */
             CHECK(count < v->count);
+            if (count >= v->count) break;
+            /* Point at the vector's copy: `id` is reused every iteration. */
             CHECK_STR_EQ(id, v->skills[count]);
             seen[count] = v->skills[count];
             count++;

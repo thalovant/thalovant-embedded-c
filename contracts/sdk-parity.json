@@ -65,9 +65,9 @@
       "status": "required",
       "tests": {
         "tests/fixtures/refusal-vectors.json": "6b0f4128f1cc9fd8a54944410ce93c6515bac6cde9257284e313a4fea825bfcb",
-        "tests/refusal_vectors.h": "1986cc23319a335f000871564c4771d89bb4144e7018c5c4792ccf5022caaf12",
-        "tests/test_refusal.c": "9276e0d085ff84f544cbfc0462639a7a21e702a1db404a3dfcebef3195d59a1e",
-        "tools/generate-refusal-vectors.mjs": "11833bab82dfef811ead23901c7c0196e737f56dbdef42d40244bc2be85bdbd4"
+        "tests/refusal_vectors.h": "ba53ccff2806ecdfda02196b43d9569fe02189afa67bed83ca0c895d4fe80ddc",
+        "tests/test_refusal.c": "2c697e767cf4abf16717725560192b01a3d8c308b450eef47c2964b4e788b1dc",
+        "tools/generate-refusal-vectors.mjs": "e90de9275d24cf2a535bf72cfeb5d6a2a82a3e83abe4c1a63ba705d23a6adb4b"
       },
       "vectors": {
         "refusal-vectors.json": "tests/fixtures/refusal-vectors.json"
@@ -88,7 +88,7 @@
       "status": "required",
       "tests": {
         "tests/reply_claim_vectors.h": "fbab3a5e9a94c590593e3e9bca5c9a0687296d733863341bdaa9642fe17467b9",
-        "tests/test_ask.c": "b0530277fbb60e437b44722bce09064ee09592ae009eb38fb1f188abac9f5a27",
+        "tests/test_ask.c": "3b5a8d4aacc73fd603f10033f1fdf6a6b9dd0bdba0f2eff1889d3fb34fc9d628",
         "tests/test_intents.c": "9eb92a84ca205f406eee79e648ca09056d908d69b5d1978fa016cd2525486e1c",
         "tests/test_noise.c": "3e5c22b46d4bf071cfc242c16970f011eb747d40e12b2e7f39cd762940850e39",
         "tests/test_request_helpers.c": "8a75a0afd9988674ba436a7ce998ef8c2c811f724baf9a27d2583adf6b0bf32f",
