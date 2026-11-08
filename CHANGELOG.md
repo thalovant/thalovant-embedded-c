@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2 - 2026-11-08
+
+- Automated patch release of the unreleased changes on `main` since v0.8.1.
+
 ## 0.8.1 - 2026-11-03
 
 - Automated patch release of the unreleased changes on `main` since v0.8.0.
