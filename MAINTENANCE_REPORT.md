@@ -1,6 +1,20 @@
-Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Record the chat-apps parity acknowledgment (not applicable).
+Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: Record the Python revision and review of every acknowledged reference digest, and the digest a0722fec2c54.
 
 # Maintenance Report
+
+## 2026-11-12: Python reference digests acknowledged on the intercom branch
+
+`contracts/sdk-parity.json` lists three reference digests that thalovant-python-sdk `feature/intercom-v1` (PR 114) published while it moved (this library recorded the `intercom` capability as `not-applicable` when the second of the Python revisions below was current, so it holds three of the five). Each is the digest of the `reference` object of that repository's `contracts/sdk-parity.json` (`scripts/check-sdk-parity.py`, `digest(reference)`), and each was reviewed by reading the Python diff of the `intercom` capability for impact on this library, then confirmed with `check-sdk-parity.py --workspace <checkouts> --consumer thalovant-embedded-c`. Embedded C is a caller-buffer wire library without a control-plane HTTP client, so the capability stays `not-applicable` (the reason is in the file) and every acknowledgement is a review, not a port:
+
+| Digest | Python commit | What moved in the Python reference | Review here |
+|---|---|---|---|
+| `a82b669bc2cb` | `375b822` | amendment 2: `cancel_announcement`, safe ids, the announce timeout, key replay docs | read; none; no file here changed |
+| `69badc4fb072` | `577cb4b` | the final API: `intercom:urgent`, speaker `kind`, `can_play`, `policy_synced`, typed problem codes, one text rule | read; none; no file here changed |
+| `a0722fec2c54` | `cc33f67` | review round 2: a requests-style session read off the event loop, the urgent-scope code before the generic scope refusal, nested problem members, docs aligned with the API | read; none; no file here changed |
+
+No source, test or version file changed, so no release is made from this change.
+
+Transparency Report: AI model Claude Sonnet 5.5; actions: added the digest `a0722fec2c54` to `contracts/sdk-parity.json` and recorded the revision and review of every added digest in this report; oversight: none yet, review pending.
 
 ## 2026-11-03 — Chat apps parity acknowledgment
 
