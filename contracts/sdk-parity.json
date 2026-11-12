@@ -48,6 +48,10 @@
       "reason": "Caller owns credential storage; C consumes supplied keys and credentials.",
       "status": "not-applicable"
     },
+    "intercom": {
+      "reason": "Intercom is a control-plane capability (announce on a household hub's speakers, speaker settings, history) reached over the Thalovant HTTP API. Embedded C is a caller-buffer wire library without a control-plane HTTP client, so callers that need it use their own HTTP stack against the API.",
+      "status": "not-applicable"
+    },
     "inventory": {
       "reason": "C has no managed inventory object model or filesystem cache; callers own parsing and storage.",
       "status": "not-applicable"
@@ -150,7 +154,8 @@
     "5b973a65ab583082069afaa67e2baf7257cbc4950a89460c9912851821258d16",
     "1e56099da5dba82b48fb83b27e53192f3cd70e7d0f5a9c4f94bb08948e45a1d6",
     "57c7e71f6456344877b34bb3093399f813c7a21fde3ae14f48c8b3fa04be43b9",
-    "6dfb3bb31ac7590591febef1c4d8372984ca6cdad4700381f869db30c38452df"
+    "6dfb3bb31ac7590591febef1c4d8372984ca6cdad4700381f869db30c38452df",
+    "a82b669bc2cbc499fe92ea549d3ea2535132f94bf35be0383fe786efd0284f6f"
   ],
   "schema_version": 1
 }
