@@ -1,5 +1,3 @@
-Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Create the suggestions list.
-
 # Suggestions: thalovant-embedded-c
 
 ## Decide whether this SDK should manage chat apps
