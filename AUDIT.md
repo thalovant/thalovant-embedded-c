@@ -1,5 +1,3 @@
-Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Note the chat-apps capability this SDK does not implement.
-
 # Audit
 
 Known issues, technical debt and their status, from test runs and code reading. Each entry names the code it concerns.

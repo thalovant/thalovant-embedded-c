@@ -1,5 +1,3 @@
-Last Edit: Claude Opus 5.5 - 2026-11-03 - Motive: Create the quick facts.
-
 # Quick facts: thalovant-embedded-c
 
 | Fact | Value |
