@@ -28,6 +28,10 @@
       "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client: it creates and deletes no connections, so it has no answer to check the kind against and no refusal to classify. The caller owns every request it would make.",
       "status": "not-applicable"
     },
+    "connector-connections": {
+      "reason": "Home bridges and the connector gateway API's refusals are reached over the Thalovant HTTP control plane: a connector connection, replay detection on a create, the serves block and the typed refusal codes. Embedded C is a caller-buffer wire library without a control-plane HTTP client, so it creates no connections and has nothing to classify.",
+      "status": "not-applicable"
+    },
     "control": {
       "reason": "Embedded C is a caller-buffer wire library without a control-plane HTTP client.",
       "status": "not-applicable"
@@ -157,7 +161,8 @@
     "6dfb3bb31ac7590591febef1c4d8372984ca6cdad4700381f869db30c38452df",
     "a82b669bc2cbc499fe92ea549d3ea2535132f94bf35be0383fe786efd0284f6f",
     "69badc4fb072703e675ce50ae3a09765bf49cbf65efcc2fef5befb46f2b32a8c",
-    "a0722fec2c5404d1b822e17b9da787370ad7630026c85c25d02f10dc66e8d003"
+    "a0722fec2c5404d1b822e17b9da787370ad7630026c85c25d02f10dc66e8d003",
+    "45c675d3175249f07bc73589f88f049c8dbec34f0064515c8b176d5ef03c89fd"
   ],
   "schema_version": 1
 }
